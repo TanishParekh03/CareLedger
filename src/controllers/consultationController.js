@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 const { isUuid } = require('../utils/validators');
 
-const CONSULTATION_STATUSES = new Set(['in_progress', 'completed', 'cancelled']);
+const CONSULTATION_STATUSES = new Set(['in_progress', 'completed']);
 
 async function startConsultation(req, res, next) {
   try {
@@ -39,7 +39,7 @@ async function startConsultation(req, res, next) {
     const inserted = await pool.query(
       `insert into consultations (patient_id, doctor_id, status)
        values ($1, $2, 'in_progress')
-       returning id, patient_id, doctor_id, status, created_at`,
+       returning id, patient_id, doctor_id, status, consultation_date`,
       [patient_id, doctorId]
     );
 
@@ -120,54 +120,94 @@ async function updateConsultationStatus(req, res, next) {
 }
 
 async function upsertPrescription(req, res, next) {
+  const client = await pool.connect();
+  
   try {
-    const { consultationId } = req.params;
+    await client.query('BEGIN');
+    
+    const { consultationId } = req.params;  
+    const { items } = req.body;             
+    
 
     if (!isUuid(consultationId)) {
-      return errorResponse(res, 400, 'VALIDATION_ERROR', 'consultationId must be a valid UUID');
+      return errorResponse(res, 400, 'VALIDATION_ERROR', 'Invalid consultation ID');
     }
-
+    
+   
+    if (!Array.isArray(items) || items.length === 0) {
+      return errorResponse(res, 400, 'VALIDATION_ERROR', 'items must be a non-empty array');
+    }
+    
     const doctorId = req.doctor?.id;
     if (!doctorId) {
-      return errorResponse(res, 403, 'FORBIDDEN', 'Doctor verification context missing');
+      return errorResponse(res, 403, 'FORBIDDEN', 'Doctor context missing');
     }
-
-    const consultation = await pool.query(
-      `select id, status
-       from consultations
-       where id = $1 and doctor_id = $2`,
-      [consultationId, doctorId]
+    
+    
+    const consultation = await client.query(
+      `SELECT id, patient_id, status FROM consultations 
+       WHERE id = $1 AND doctor_id = $2`,
+      [consultationId, doctorId]  
     );
-
+    
     if (consultation.rowCount === 0) {
       return errorResponse(res, 404, 'NOT_FOUND', 'Consultation not found');
     }
+    
+    const { status, patient_id } = consultation.rows[0];
+    
 
-    if (consultation.rows[0].status === 'completed') {
-      return errorResponse(res, 403, 'FORBIDDEN', 'Consultation is completed; prescription can no longer be changed');
+    if (status === 'completed' || status === 'cancelled') {
+      return errorResponse(res, 403, 'FORBIDDEN', 
+        `Cannot modify prescription for ${status} consultation`);
     }
-
-    if (consultation.rows[0].status === 'cancelled') {
-      return errorResponse(res, 403, 'FORBIDDEN', 'Consultation is cancelled; prescription can no longer be changed');
-    }
-
-    const payload = req.body;
-    if (!payload || typeof payload !== 'object') {
-      return errorResponse(res, 400, 'BAD_REQUEST', 'Missing prescription payload');
-    }
-
-    const upserted = await pool.query(
-      `insert into prescriptions (consultation_id, payload)
-       values ($1, $2)
-       on conflict (consultation_id)
-       do update set payload = excluded.payload, updated_at = now()
-       returning id, consultation_id, payload, created_at, updated_at`,
-      [consultationId, payload]
+    
+    const prescription = await client.query(
+      `INSERT INTO prescriptions (consultation_id, patient_id, doctor_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (consultation_id) 
+       DO UPDATE SET issued_at = now()
+       RETURNING id`,
+      [consultationId, patient_id, doctorId]
     );
+    
+    const prescriptionId = prescription.rows[0].id;
+    
+    await client.query(
+      `DELETE FROM prescription_items WHERE prescription_id = $1`,
+      [prescriptionId]
+    );
+    
 
-    return successResponse(res, 200, upserted.rows[0], 'Operation successful.');
+    for (const item of items) {
+      if (!item.drug_name || !item.dosage || !item.frequency || !item.duration_days) {
+        await client.query('ROLLBACK');
+        return errorResponse(res, 400, 'VALIDATION_ERROR', 
+          'Each item must have drug_name, dosage, frequency, and duration_days');
+      }
+      
+      await client.query(
+        `INSERT INTO prescription_items 
+         (prescription_id, drug_name, dosage, frequency, duration_days)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [prescriptionId, item.drug_name, item.dosage, 
+         item.frequency, item.duration_days]
+      );
+    }
+    
+    await client.query('COMMIT');
+    
+    return successResponse(res, 200, {
+      prescription_id: prescriptionId,
+      consultation_id: consultationId,
+      items_count: items.length
+    }, 'Prescription saved successfully');
+    
   } catch (err) {
+    await client.query('ROLLBACK');
     return next(err);
+  } finally {
+    client.release();
   }
 }
 
@@ -191,15 +231,28 @@ async function getPrescription(req, res, next) {
       [consultationId, doctorId]
     );
 
-    if (consultation.rowCount === 0) {
+    if ( consultation.rowCount === 0) {
       return errorResponse(res, 404, 'NOT_FOUND', 'Consultation not found');
     }
 
     const q = await pool.query(
-      `select id, consultation_id, payload, created_at, updated_at
-       from prescriptions
-       where consultation_id = $1`,
-      [consultationId]
+      `p.id AS prescription_id,
+         p.consultation_id,
+         p.patient_id,
+         p.doctor_id,
+         p.issued_at, jsonb_agg(
+        json_build_object(
+            'drug_name', p_items.drug_name, 
+            'dosage', p_items.dosage, 
+            'frequency', p_items.frequency, 
+            'duration_days', p_items.duration_days
+        )
+    ) AS items
+       from prescription p
+       left join prescription_items p_items ON p_items.prescription_id = p.id
+       where p.consultation_id = $1 and p.doctor_id = $2
+       group by p.id, p.consultation_id, p.doctor_id`,
+      [consultationId, doctorId]
     );
 
     if (q.rowCount === 0) {
