@@ -1,13 +1,7 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    host: process.env.PGHOST,
-    port: process.env.PGPORT ? Number(process.env.PGPORT) : undefined,
-    user: process.env.PGUSER,
-    password: process.env.PGPASSWORD,
-    database: process.env.PGDATABASE,
-    ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : undefined,
-});
+    connectionString: `postgresql://postgres.wldwgqnabieyyamwjliy:xa9huHyULG6yQLYT@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres`,
+})
 
 module.exports = pool;
