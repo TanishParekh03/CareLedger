@@ -3,6 +3,9 @@ const express = require('express');
 const { authenticate } = require('../middlewares/authMiddleware');
 const { requireRole } = require('../middlewares/roleMiddleware');
 const patientController = require('../controllers/patientController');
+const allergyController = require('../controllers/allergyController');
+const conditionController = require('../controllers/conditionController');
+const emergencyController = require('../controllers/emergencyController');
 
 const router = express.Router();
 
@@ -17,5 +20,26 @@ router.delete('/revoke-access/:doctorId', requireRole('patient'), patientControl
 
 router.get('/access-list', requireRole('patient'), patientController.getAccessList);
 router.get('/:id', patientController.getPatientById);
+
+
+
+
+// Allergy routes
+router.post('/allergies', requireRole('patient'), allergyController.createAllergy);
+router.get('/allergies', requireRole('patient'), allergyController.getOwnAllergy);
+router.put('/allergies/:id', requireRole('patient'), allergyController.updateAllergy);
+router.delete('/allergies/:id', requireRole('patient'), allergyController.deleteAllergy);
+
+
+// Chronic conditions routes
+router.post('/chronic-conditions', requireRole('patient'), conditionController.createCondition);
+router.get('/chronic-conditions', requireRole('patient'), conditionController.getOwnConditions);
+router.put('/chronic-conditions/:id', requireRole('patient'), conditionController.updateCondition);
+router.delete('/chronic-conditions/:id', requireRole('patient'), conditionController.deleteCondition);
+
+
+// Emergency info
+router.post('/emergency-info', requireRole('patient'), emergencyController.upsertEmergencyInfo);
+router.get('/emergency-info', requireRole('patient'), emergencyController.getOwnEmergencyInfo);
 
 module.exports = router;
