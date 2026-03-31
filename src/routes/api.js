@@ -7,6 +7,7 @@ const doctorRoutes = require('./doctorRoutes');
 const consultationRoutes = require('./consultationRoutes');
 const adminRoutes = require('./adminRoutes');
 const activeMedicationRoutes = require('./activeMedicationRoutes');
+const ocrRoutes = require('./ocrRoutes');
 
 const router = express.Router();
 
@@ -17,5 +18,6 @@ router.use('/doctors', doctorRoutes);
 router.use('/consultations', consultationRoutes);
 router.use('/admin', adminRoutes);
 router.use('/medications', activeMedicationRoutes);
+router.use('/ocr', ocrRoutes);
 
 module.exports = router;
