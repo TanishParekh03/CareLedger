@@ -29,4 +29,7 @@ router.get('/patients/:patientId/chronic-conditions', requireVerifiedDoctor, con
 //patient emergency info
 router.get('/patients/:patientId/emergency-info', requireVerifiedDoctor, emergencyController.getPatientEmergencyInfo);
 
+//emergency data for patient
+router.get('/emergency/:patientId/:clinicId', requireVerifiedDoctor, doctorController.getPatientDataDuringEmergency);
+
 module.exports = router;

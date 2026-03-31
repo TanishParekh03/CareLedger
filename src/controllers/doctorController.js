@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const sendMail = require('../services/emailService');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 const { isUuid } = require('../utils/validators');
 
@@ -181,10 +182,78 @@ async function getOwnConsultations(req, res, next) {
   }
 }
 
+
+const getPatientDataDuringEmergency = async (req , res , next) => {
+  try {
+    const doctorId = req.doctor?.id;
+
+    if (!doctorId) {
+      return errorResponse(res, 403, 'FORBIDDEN', 'Doctor verification context missing');
+    }
+
+    const patientId = req.params.patientId;
+    const clinicId = req.params.clinicId;
+    const getPatientData = await pool.query(
+      `select p.full_name as "patient-name", p.gender as gender, p.blood_group as blood_group, age(p.date_of_birth) as age,
+    (
+        select coalesce(json_agg(json_build_object(
+            'allergy', a.allergen,
+            'severity', a.severity
+        )), '[]')
+        from allergies a
+        where a.patient_id = p.id
+    ) as allergies,
+    (
+        select coalesce(json_agg(json_build_object(
+            'condition-name', c.condition_name,
+            'status', c.status,
+            'diagnosed-date', c.diagnosed_date
+        )), '[]')
+        from chronic_conditions c
+        where c.patient_id = p.id
+    ) as "chronic-illness",
+    (
+        select coalesce(json_agg(json_build_object(
+            'medicine-name', m.name,
+            'dosage', m.dosage,
+            'prescribed-for', m.prescribed_for,
+            'prescribed_by', (select d.full_name from doctors d where d.id = m.prescribed_by),
+            'date', m.prescribed_at
+        )), '[]')
+        from active_medication m
+        where m.patient_id = p.id
+    ) as "active-medications"
+
+from patients p
+where p.id = $1;` , [patientId]
+    )
+
+    const getEmergencyContact = await pool.query(
+      `select d.full_name as "doctor-name" , c.address as "doctor-address" ,d.phone as "doctor-contact-number" , c.clinic_name as "doctor-clinic-name" ,
+       e.contact_email as "patient-emergency-email" , e.contact_name as "patient-emergency-name" , p.full_name as "patient-name" 
+       from doctors d
+       left join clinics c on c.doctor_id = d.id and c.id = $2
+       left join emergency_info e on e.patient_id = $3
+       left join patients p on p.id = $3
+       where d.id = $1`,[doctorId , clinicId , patientId]
+    )
+   const len = getEmergencyContact.rowCount;
+    for(let i = 0 ; i < len ; i++ ){
+      const data = getEmergencyContact.rows[i];
+      await sendMail(data);
+    }
+    return successResponse(res, 200, getPatientData.rows, 'Operation successful.');
+
+  } catch (error) {
+    return next(error)
+  }
+}
+
 module.exports = {
   createDoctorProfile,
   getOwnProfile,
   getDoctorById,
   updateOwnProfile,
   getOwnConsultations,
+  getPatientDataDuringEmergency
 };
