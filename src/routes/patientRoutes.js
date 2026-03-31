@@ -38,8 +38,10 @@ router.put('/chronic-conditions/:id', requireRole('patient'), conditionControlle
 router.delete('/chronic-conditions/:id', requireRole('patient'), conditionController.deleteCondition);
 
 
-// // Emergency info
-// router.post('/emergency-info', requireRole('patient'), emergencyController.upsertEmergencyInfo);
-// router.get('/emergency-info', requireRole('patient'), emergencyController.getOwnEmergencyInfo);
+// Emergency info
+router.post('/emergency-info', requireRole('patient'), emergencyController.addEmergencyInfo);
+router.get('/emergency-info', requireRole('patient'), emergencyController.getEmergencyInfo);
+router.put('/emergency-info/:id', requireRole('patient'), emergencyController.updateEmergencyInfo);
+router.delete('/emergency-info/:id', requireRole('patient'), emergencyController.deleteEmergencyInfo);
 
 module.exports = router;
