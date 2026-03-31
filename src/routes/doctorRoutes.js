@@ -21,13 +21,13 @@ router.get('/:id', doctorController.getDoctorById);
 
 
 //patient allergies 
-router.get('/patients/:patientId/allergies', requireVerifiedDoctor, allergyController.getPatientAllergy);
+// router.get('/patients/:patientId/allergies', requireVerifiedDoctor, allergyController.getPatientAllergy);
 
 //patient chronic condition
-router.get('/patients/:patientId/chronic-conditions', requireVerifiedDoctor, conditionController.getPatientConditions);
+// router.get('/patients/:patientId/chronic-conditions', requireVerifiedDoctor, conditionController.getPatientConditions);
 
 //patient emergency info
-router.get('/patients/:patientId/emergency-info', requireVerifiedDoctor, emergencyController.getPatientEmergencyInfo);
+// router.get('/patients/:patientId/emergency-info', requireVerifiedDoctor, emergencyController.getPatientEmergencyInfo);
 
 //emergency data for patient
 router.get('/emergency/:patientId/:clinicId', requireVerifiedDoctor, doctorController.getPatientDataDuringEmergency);
