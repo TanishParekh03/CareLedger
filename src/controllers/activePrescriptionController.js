@@ -2,14 +2,6 @@ const pool = require('../config/db');
 const { successResponse, errorResponse } = require('../utils/responseFormatter');
 const { isUuid } = require('../utils/validators');
 
-// Helper function to get doctor ID from user ID
-const getDoctorIdFromUserId = async (userId) => {
-    const result = await pool.query(
-        'SELECT id FROM doctors WHERE user_id = $1',
-        [userId]
-    );
-    return result.rowCount > 0 ? result.rows[0].id : null;
-};
 
 const getActiveMedicationByUserId = async (req, res, next) => {
     try {
@@ -42,7 +34,7 @@ const getActiveMedicationByUserId = async (req, res, next) => {
 const deleteActiveMedicationById = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const doctorUserId = req.user?.id;
+        const doctorId = req.doctor?.id;
 
         if (!id) {
             return errorResponse(res, 400, 'BAD_REQUEST', 'Medication ID not provided');
@@ -52,13 +44,8 @@ const deleteActiveMedicationById = async (req, res, next) => {
             return errorResponse(res, 400, 'BAD_REQUEST', 'Invalid medication ID format');
         }
 
-        if (!doctorUserId) {
-            return errorResponse(res, 401, 'UNAUTHORIZED', 'Doctor authentication required');
-        }
-
-        const doctorId = await getDoctorIdFromUserId(doctorUserId);
         if (!doctorId) {
-            return errorResponse(res, 403, 'FORBIDDEN', 'Only doctors can delete medications');
+            return errorResponse(res, 403, 'FORBIDDEN', 'Doctor verification context missing');
         }
 
         const checkMed = await pool.query(
@@ -84,7 +71,7 @@ const deleteActiveMedicationById = async (req, res, next) => {
 const addActiveMedication = async (req, res, next) => {
     try {
         const { user_id, name, dosage, prescibed_for, prescibed_at } = req.body;
-        const doctorUserId = req.user?.id;
+        const doctorId = req.doctor?.id;
 
         // Validation
         if (!user_id || !name || !dosage || !prescibed_for || !prescibed_at) {
@@ -95,13 +82,8 @@ const addActiveMedication = async (req, res, next) => {
             return errorResponse(res, 400, 'BAD_REQUEST', 'Invalid user ID format');
         }
 
-        if (!doctorUserId) {
-            return errorResponse(res, 401, 'UNAUTHORIZED', 'Doctor authentication required');
-        }
-
-        const doctorId = await getDoctorIdFromUserId(doctorUserId);
         if (!doctorId) {
-            return errorResponse(res, 403, 'FORBIDDEN', 'Only doctors can add medications');
+            return errorResponse(res, 403, 'FORBIDDEN', 'Doctor verification context missing');
         }
 
         const result = await pool.query(
@@ -121,7 +103,7 @@ const updateActiveMedication = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, dosage, prescibed_for, prescibed_at } = req.body;
-        const doctorUserId = req.user?.id;
+        const doctorId = req.doctor?.id;
 
         if (!id) {
             return errorResponse(res, 400, 'BAD_REQUEST', 'Medication ID not provided');
@@ -131,14 +113,10 @@ const updateActiveMedication = async (req, res, next) => {
             return errorResponse(res, 400, 'BAD_REQUEST', 'Invalid medication ID format');
         }
 
-        if (!doctorUserId) {
-            return errorResponse(res, 401, 'UNAUTHORIZED', 'Doctor authentication required');
+        if (!doctorId) {
+            return errorResponse(res, 403, 'FORBIDDEN', 'Doctor verification context missing');
         }
 
-        const doctorId = await getDoctorIdFromUserId(doctorUserId);
-        if (!doctorId) {
-            return errorResponse(res, 403, 'FORBIDDEN', 'Only doctors can update medications');
-        }
         if (!name && !dosage && !prescibed_for && !prescibed_at) {
             return errorResponse(res, 400, 'BAD_REQUEST', 'At least one field must be provided for update');
         }
