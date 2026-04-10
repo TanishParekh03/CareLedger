@@ -16,6 +16,7 @@ router.post('/', requireRole('patient'), patientController.createPatientProfile)
 
 router.put('/', requireRole('patient'), patientController.updateOwnProfile);
 router.get('/consultations', requireRole('patient'), patientController.getOwnConsultations);
+router.get('/consultations/:consultationId/prescription', requireRole('patient'), patientController.getOwnPrescription);
 
 router.post('/grant-access', requireRole('patient'), patientController.grantDoctorAccess);
 router.delete('/revoke-access/:doctorId', requireRole('patient'), patientController.revokeDoctorAccess);

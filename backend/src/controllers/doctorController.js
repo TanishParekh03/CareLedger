@@ -166,10 +166,46 @@ async function searchPatientsForConsultation(req, res, next) {
 
     const q = String(req.query.q || '').trim();
     const limitRaw = Number(req.query.limit || 10);
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 25) : 10;
+    let limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 25) : 10;
 
     if (!q) {
-      return successResponse(res, 200, [], 'Operation successful.');
+      // If no query, return the doctor's active accessible patients
+      const activePatients = await pool.query(
+        `SELECT
+           p.id,
+           p.full_name,
+           p.health_id::text AS health_id,
+           p.date_of_birth,
+           p.gender,
+           p.blood_group,
+           'active' AS access_status,
+           ap.expires_at AS access_expires_at,
+           ac.id AS active_consultation_id,
+           ac.consultation_date AS active_consultation_date
+         FROM access_permissions ap
+         JOIN patients p ON p.id = ap.patient_id
+         LEFT JOIN LATERAL (
+           SELECT c.id, c.consultation_date
+           FROM consultations c
+           WHERE c.patient_id = p.id
+             AND c.doctor_id = $1
+             AND LOWER(c.status::text) = 'in_progress'
+           ORDER BY c.consultation_date DESC
+           LIMIT 1
+         ) ac ON true
+         WHERE ap.doctor_id = $1
+           AND ap.status = 'active'
+           AND (ap.expires_at IS NULL OR ap.expires_at > NOW())
+         ORDER BY p.full_name ASC
+         LIMIT $2`,
+        [doctorId, limit]
+      );
+      
+      const rows = activePatients.rows.map(row => ({
+         ...row,
+         has_active_access: true,
+      }));
+      return successResponse(res, 200, rows, 'Operation successful.');
     }
 
     const normalizedQuery = q.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -191,7 +227,7 @@ async function searchPatientsForConsultation(req, res, next) {
          SELECT a.status, a.expires_at
          FROM access_permissions a
          WHERE a.patient_id = p.id AND a.doctor_id = $1
-         ORDER BY a.id DESC
+         ORDER BY a.created_at DESC
          LIMIT 1
        ) ap ON true
        LEFT JOIN LATERAL (
@@ -292,7 +328,7 @@ async function getOwnConsultations(req, res, next) {
 
     const consultations = await pool.query(
       `SELECT
-         c.id, c.patient_id, c.consultation_date, c.status,
+         c.id, c.patient_id, c.consultation_date, c.status, c.updated_at,
          p.full_name AS patient_name, p.health_id
        FROM consultations c
        JOIN patients p ON p.id = c.patient_id

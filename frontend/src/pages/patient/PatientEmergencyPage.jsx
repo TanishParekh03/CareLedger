@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Mail, PencilLine, Phone, ShieldAlert, Trash2, Users } from 'lucide-react';
 import {
   createEmergencyInfo,
@@ -15,11 +16,10 @@ const INITIAL_FORM = {
 };
 
 function PatientEmergencyPage() {
-  const [contacts, setContacts] = useState([]);
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState('');
   const [form, setForm] = useState(INITIAL_FORM);
   const [notice, setNotice] = useState({ type: '', text: '' });
-  const [loading, setLoading] = useState(true);
 
   const getFriendlyMessage = (error, fallback) => {
     const status = error?.response?.status;
@@ -30,49 +30,53 @@ function PatientEmergencyPage() {
     return fallback;
   };
 
-  const load = async () => {
-    setLoading(true);
-    setNotice({ type: '', text: '' });
-    try {
-      const response = await getEmergencyInfo();
-      const details = response?.data?.emergency_details || [];
-      setContacts(details);
-    } catch (e) {
-      setContacts([]);
-      const message = getFriendlyMessage(e, 'Unable to load emergency contacts right now.');
-      if (message) {
-        setNotice({ type: 'error', text: message });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { data: emergencyRes, isLoading: loading } = useQuery({
+    queryKey: ['patient-emergency'],
+    queryFn: getEmergencyInfo
+  });
+  const contacts = emergencyRes?.data?.emergency_details || [];
 
   const reset = () => {
     setForm(INITIAL_FORM);
     setEditingId('');
   };
 
+  const createMutation = useMutation({
+    mutationFn: createEmergencyInfo,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-emergency'] });
+      reset();
+      setNotice({ type: 'success', text: 'Emergency contact added.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save emergency contact right now.') })
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }) => updateEmergencyInfo(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-emergency'] });
+      reset();
+      setNotice({ type: 'success', text: 'Emergency contact updated.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save emergency contact right now.') })
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteEmergencyInfo,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-emergency'] });
+      setNotice({ type: 'success', text: 'Emergency contact removed.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to delete emergency contact right now.') })
+  });
+
   const onSubmit = async (event) => {
     event.preventDefault();
     setNotice({ type: '', text: '' });
-
-    try {
-      if (editingId) {
-        await updateEmergencyInfo(editingId, form);
-        setNotice({ type: 'success', text: 'Emergency contact updated.' });
-      } else {
-        await createEmergencyInfo(form);
-        setNotice({ type: 'success', text: 'Emergency contact added.' });
-      }
-      reset();
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save emergency contact right now.') });
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload: form });
+    } else {
+      createMutation.mutate(form);
     }
   };
 
@@ -82,14 +86,8 @@ function PatientEmergencyPage() {
       return;
     }
     if (!window.confirm('Delete this emergency contact?')) return;
-
-    try {
-      await deleteEmergencyInfo(target.id);
-      setNotice({ type: 'success', text: 'Emergency contact removed.' });
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to delete emergency contact right now.') });
-    }
+    setNotice({ type: '', text: '' });
+    deleteMutation.mutate(target.id);
   };
 
   const familyCount = contacts.filter((item) => (item.contact_relationship || '').toLowerCase() !== 'doctor').length;

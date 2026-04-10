@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, FlaskConical, PencilLine, ShieldAlert, Trash2 } from 'lucide-react';
 import { createAllergy, deleteAllergy, getAllergies, updateAllergy } from '../../api/patients';
 import { titleCase } from '../../utils/formatters';
@@ -16,65 +17,65 @@ function getFriendlyMessage(error, fallback) {
 }
 
 function PatientAllergiesPage() {
-  const [allergies, setAllergies] = useState([]);
+  const queryClient = useQueryClient();
   const [form, setForm] = useState(INITIAL_FORM);
   const [editingId, setEditingId] = useState('');
-  const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState({ type: '', text: '' });
 
-  const load = async () => {
-    setLoading(true);
-    setNotice({ type: '', text: '' });
-    try {
-      const response = await getAllergies();
-      setAllergies(response?.data || []);
-    } catch (e) {
-      setAllergies([]);
-      const message = getFriendlyMessage(e, 'Unable to load allergy records right now.');
-      if (message) {
-        setNotice({ type: 'error', text: message });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
+  const { data: allergiesRes, isLoading: loading } = useQuery({
+    queryKey: ['patient-allergies'],
+    queryFn: getAllergies,
+  });
+  const allergies = allergiesRes?.data || [];
 
   const resetForm = () => {
     setForm(INITIAL_FORM);
     setEditingId('');
   };
 
+  const createMutation = useMutation({
+    mutationFn: createAllergy,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-allergies'] });
+      resetForm();
+      setNotice({ type: 'success', text: 'Allergy added.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save allergy right now.') })
+  });
+  
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }) => updateAllergy(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-allergies'] });
+      resetForm();
+      setNotice({ type: 'success', text: 'Allergy updated.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save allergy right now.') })
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAllergy,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['patient-allergies'] });
+      setNotice({ type: 'success', text: 'Allergy deleted.' });
+    },
+    onError: (e) => setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to delete allergy right now.') })
+  });
+
   const onSubmit = async (event) => {
     event.preventDefault();
     setNotice({ type: '', text: '' });
-
-    try {
-      if (editingId) {
-        await updateAllergy(editingId, form);
-      } else {
-        await createAllergy(form);
-      }
-      resetForm();
-      setNotice({ type: 'success', text: editingId ? 'Allergy updated.' : 'Allergy added.' });
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save allergy right now.') });
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload: form });
+    } else {
+      createMutation.mutate(form);
     }
   };
 
   const onDelete = async (id) => {
     if (!window.confirm('Delete this allergy?')) return;
-    try {
-      await deleteAllergy(id);
-      setNotice({ type: 'success', text: 'Allergy deleted.' });
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to delete allergy right now.') });
-    }
+    setNotice({ type: '', text: '' });
+    deleteMutation.mutate(id);
   };
 
   const severeCount = allergies.filter((item) => item.severity === 'severe').length;

@@ -40,7 +40,7 @@ class OCRManager:
         
         try:
             cls._status = "initializing"
-            print("[OCR_INIT] Starting PaddleOCR initialization...")
+            print("[OCR_INIT] Starting PaddleOCR initialization...", file=sys.stderr)
             
             cls._ocr = PaddleOCR(
                 text_detection_model_name="PP-OCRv5_mobile_det",
@@ -51,7 +51,7 @@ class OCRManager:
             )
             
             cls._status = "initialized"
-            print("[OCR_INIT] PaddleOCR initialized successfully")
+            print("[OCR_INIT] PaddleOCR initialized successfully", file=sys.stderr)
             
             return {
                 "status": "initialized",
@@ -60,7 +60,7 @@ class OCRManager:
             }
         except Exception as e:
             cls._status = "failed"
-            print(f"[OCR_INIT] Initialization failed: {e}")
+            print(f"[OCR_INIT] Initialization failed: {e}", file=sys.stderr)
             return {
                 "status": "failed",
                 "message": f"OCR initialization failed: {str(e)}",

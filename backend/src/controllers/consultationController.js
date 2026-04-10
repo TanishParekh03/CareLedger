@@ -93,7 +93,7 @@ async function updateConsultationStatus(req, res, next) {
     }
 
     if (!CONSULTATION_STATUSES.has(status)) {
-      return errorResponse(res, 400, 'VALIDATION_ERROR', "status must be one of ['in_progress','completed]");
+      return errorResponse(res, 400, 'VALIDATION_ERROR', "status must be one of ['in_progress','completed']");
     }
 
     const doctorId = req.doctor?.id;
@@ -126,7 +126,7 @@ async function upsertPrescription(req, res, next) {
     await client.query('BEGIN');
     
     const { consultationId } = req.params;  
-    const { items } = req.body;             
+    const { items, doctor_notes } = req.body;             
     
 
     if (!isUuid(consultationId)) {
@@ -163,12 +163,12 @@ async function upsertPrescription(req, res, next) {
     }
     
     const prescription = await client.query(
-      `INSERT INTO prescriptions (consultation_id, patient_id, doctor_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO prescriptions (consultation_id, patient_id, doctor_id, doctor_notes)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (consultation_id) 
-       DO UPDATE SET issued_at = now()
+       DO UPDATE SET issued_at = now(), doctor_notes = COALESCE($4, prescriptions.doctor_notes)
        RETURNING id`,
-      [consultationId, patient_id, doctorId]
+      [consultationId, patient_id, doctorId, doctor_notes || null]
     );
     
     const prescriptionId = prescription.rows[0].id;
@@ -240,18 +240,20 @@ async function getPrescription(req, res, next) {
          p.consultation_id,
          p.patient_id,
          p.doctor_id,
-         p.issued_at, jsonb_agg(
+         p.issued_at,
+         p.doctor_notes,
+         jsonb_agg(
         json_build_object(
             'drug_name', p_items.drug_name, 
             'dosage', p_items.dosage, 
             'frequency', p_items.frequency, 
             'duration_days', p_items.duration_days
         )
-    ) AS items
-      from prescriptions p
-       left join prescription_items p_items ON p_items.prescription_id = p.id
-       where p.consultation_id = $1 and p.doctor_id = $2
-       group by p.id, p.consultation_id, p.doctor_id`,
+      ) AS items
+       from prescriptions p
+        left join prescription_items p_items ON p_items.prescription_id = p.id
+        where p.consultation_id = $1 and p.doctor_id = $2
+        group by p.id, p.consultation_id, p.doctor_id`,
       [consultationId, doctorId]
     );
 
@@ -265,10 +267,116 @@ async function getPrescription(req, res, next) {
   }
 }
 
+async function finalizeConsultation(req, res, next) {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const { consultationId } = req.params;
+    const { items, doctor_notes } = req.body || {};
+
+    if (!isUuid(consultationId)) {
+      await client.query('ROLLBACK');
+      return errorResponse(res, 400, 'VALIDATION_ERROR', 'Invalid consultation ID');
+    }
+
+    const doctorId = req.doctor?.id;
+    if (!doctorId) {
+      await client.query('ROLLBACK');
+      return errorResponse(res, 403, 'FORBIDDEN', 'Doctor context missing');
+    }
+
+    const consultation = await client.query(
+      `SELECT id, patient_id, status FROM consultations
+       WHERE id = $1 AND doctor_id = $2`,
+      [consultationId, doctorId]
+    );
+
+    if (consultation.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return errorResponse(res, 404, 'NOT_FOUND', 'Consultation not found');
+    }
+
+    if (consultation.rows[0].status === 'completed') {
+      await client.query('ROLLBACK');
+      return errorResponse(res, 403, 'FORBIDDEN', 'Consultation is already completed');
+    }
+
+    const patientId = consultation.rows[0].patient_id;
+
+    // 1. Upsert prescription with doctor_notes
+    if (Array.isArray(items) && items.length > 0) {
+      const prescription = await client.query(
+        `INSERT INTO prescriptions (consultation_id, patient_id, doctor_id, doctor_notes)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (consultation_id)
+         DO UPDATE SET issued_at = now(), doctor_notes = $4
+         RETURNING id`,
+        [consultationId, patientId, doctorId, doctor_notes || null]
+      );
+
+      const prescriptionId = prescription.rows[0].id;
+
+      await client.query(
+        `DELETE FROM prescription_items WHERE prescription_id = $1`,
+        [prescriptionId]
+      );
+
+      for (const item of items) {
+        if (!item.drug_name || !item.dosage || !item.frequency || !item.duration_days) {
+          await client.query('ROLLBACK');
+          return errorResponse(res, 400, 'VALIDATION_ERROR',
+            'Each item must have drug_name, dosage, frequency, and duration_days');
+        }
+
+        await client.query(
+          `INSERT INTO prescription_items
+           (prescription_id, drug_name, dosage, frequency, duration_days)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [prescriptionId, item.drug_name, item.dosage,
+           item.frequency, item.duration_days]
+        );
+      }
+    } else {
+      // No items — just save doctor_notes if provided
+      if (doctor_notes) {
+        await client.query(
+          `INSERT INTO prescriptions (consultation_id, patient_id, doctor_id, doctor_notes)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (consultation_id)
+           DO UPDATE SET doctor_notes = $4
+           RETURNING id`,
+          [consultationId, patientId, doctorId, doctor_notes]
+        );
+      }
+    }
+
+    // 2. Mark consultation as completed
+    const updated = await client.query(
+      `UPDATE consultations
+       SET status = 'completed', updated_at = now()
+       WHERE id = $1 AND doctor_id = $2
+       RETURNING id, patient_id, doctor_id, status, consultation_date, updated_at`,
+      [consultationId, doctorId]
+    );
+
+    await client.query('COMMIT');
+
+    return successResponse(res, 200, updated.rows[0], 'Consultation finalized successfully.');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return next(err);
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   startConsultation,
   getConsultationById,
   updateConsultationStatus,
   upsertPrescription,
   getPrescription,
+  finalizeConsultation,
 };

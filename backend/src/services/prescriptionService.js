@@ -11,9 +11,10 @@ class PrescriptionService {
      * @param {string} consultation_id - Consultation ID (optional)
      * @param {string} patient_id - Patient ID (optional)
      * @param {string} doctor_id - Doctor ID (optional)
+     * @param {string} doctor_notes - Doctor notes (optional)
      * @returns {Promise<string>} - Prescription ID
      */
-    static async savePrescription(prescriptionData, consultation_id, patient_id, doctor_id) {
+    static async savePrescription(prescriptionData, consultation_id, patient_id, doctor_id, doctor_notes) {
         const client = await pool.connect();
 
         try {
@@ -21,15 +22,16 @@ class PrescriptionService {
 
             // Save prescription
             const prescriptionQuery = `
-                INSERT INTO prescriptions (consultation_id, patient_id, doctor_id, issued_at)
-                VALUES ($1, $2, $3, NOW())
+                INSERT INTO prescriptions (consultation_id, patient_id, doctor_id, issued_at, doctor_notes)
+                VALUES ($1, $2, $3, NOW(), $4)
                 RETURNING id;
             `;
 
             const prescriptionResult = await client.query(prescriptionQuery, [
                 consultation_id || null,
                 patient_id || null,
-                doctor_id || null
+                doctor_id || null,
+                doctor_notes || null
             ]);
 
             const prescriptionId = prescriptionResult.rows[0].id;
@@ -82,6 +84,7 @@ class PrescriptionService {
                 p.patient_id,
                 p.doctor_id,
                 p.issued_at,
+                p.doctor_notes,
                 p.created_at,
                 p.updated_at,
                 json_agg(

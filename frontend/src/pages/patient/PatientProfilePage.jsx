@@ -1,21 +1,29 @@
 import { useEffect, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
+  CalendarDays,
   CheckCircle2,
+  ClipboardList,
+  FlaskConical,
   Mail,
   Phone,
   PlusCircle,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   UserRoundPen,
 } from 'lucide-react';
 import {
   createPatientProfile,
+  getAllergies,
+  getChronicConditions,
   getOwnPatientProfile,
   updateOwnPatientProfile,
 } from '../../api/patients';
 import { LuxeDateField } from '../../components/common/LuxeDatePickers';
 import { useLocation } from 'react-router-dom';
-import { toDateInputValue } from '../../utils/formatters';
+import { formatDate, titleCase, toDateInputValue } from '../../utils/formatters';
 
 const INITIAL_STATE = {
   full_name: '',
@@ -26,6 +34,7 @@ const INITIAL_STATE = {
 
 function PatientProfilePage() {
   const location = useLocation();
+  const queryClient = useQueryClient();
   const [form, setForm] = useState(INITIAL_STATE);
   const [healthIdInput, setHealthIdInput] = useState('');
   const [initialForm, setInitialForm] = useState(INITIAL_STATE);
@@ -33,10 +42,14 @@ function PatientProfilePage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [profileExists, setProfileExists] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [errorLocal, setErrorLocal] = useState('');
+
+  const profileQuery = useQuery({ queryKey: ['patient-profile'], queryFn: getOwnPatientProfile, retry: false });
+  const conditionsQuery = useQuery({ queryKey: ['patient-conditions'], queryFn: getChronicConditions });
+  const allergiesQuery = useQuery({ queryKey: ['patient-allergies'], queryFn: getAllergies });
+
+  const isProfile404 = profileQuery.isError && profileQuery.error?.response?.data?.error?.code === 'NOT_FOUND';
 
   const applyProfileData = (data) => {
     const nextForm = {
@@ -45,7 +58,6 @@ function PatientProfilePage() {
       gender: data.gender || '',
       blood_group: data.blood_group || '',
     };
-
     setForm(nextForm);
     setInitialForm(nextForm);
     setHealthId(data.health_id || 'Not set');
@@ -54,76 +66,61 @@ function PatientProfilePage() {
     setPhone(data.phone || '-');
   };
 
-  const loadProfile = async (silent = false) => {
-    if (!silent) {
-      setLoading(true);
-    }
-    setError('');
-    try {
-      const response = await getOwnPatientProfile();
-      const data = response?.data || {};
-      setProfileExists(true);
-      applyProfileData(data);
-    } catch (e) {
-      const status = e?.response?.status;
-      const apiCode = e?.response?.data?.error?.code;
-
-      // First-time patients should see onboarding state instead of a red server error.
-      if (status === 404 && apiCode === 'NOT_FOUND') {
-        setProfileExists(false);
-        setError('');
-      } else {
-        setError(e?.userMessage || 'Unable to load profile right now. Please retry.');
-      }
-    } finally {
-      if (!silent) {
-        setLoading(false);
-      }
-    }
-  };
-
   useEffect(() => {
-    loadProfile();
-  }, [location.key]);
+    if (profileQuery.isSuccess && profileQuery.data) {
+      setProfileExists(true);
+      applyProfileData(profileQuery.data.data);
+    } else if (isProfile404) {
+      setProfileExists(false);
+    } else if (profileQuery.isError && !isProfile404) {
+       setErrorLocal(profileQuery.error?.userMessage || 'Unable to load profile right now.');
+    }
+  }, [profileQuery.data, profileQuery.isSuccess, profileQuery.isError, isProfile404]);
 
   const onChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const createMutation = useMutation({
+    mutationFn: (payload) => createPatientProfile(payload),
+    onSuccess: (response) => {
+      queryClient.setQueryData(['patient-profile'], response);
+      applyProfileData({ ...response?.data, email, phone });
+      setProfileExists(true);
+      setMessage('Profile created successfully.');
+    },
+    onError: (e) => setErrorLocal(e?.userMessage || 'Could not create profile.')
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (payload) => updateOwnPatientProfile(payload),
+    onSuccess: (response) => {
+      queryClient.setQueryData(['patient-profile'], response);
+      applyProfileData({ ...response?.data, email, phone });
+      setMessage('Profile updated successfully.');
+    },
+    onError: (e) => setErrorLocal(e?.userMessage || 'Could not update profile.')
+  });
+
   const onSubmit = async (event) => {
     event.preventDefault();
-    setSaving(true);
     setMessage('');
-    setError('');
+    setErrorLocal('');
 
-    try {
-      if (!profileExists) {
-        const created = await createPatientProfile({
-          ...form,
-          health_id: healthIdInput,
-        });
-        setProfileExists(true);
-        applyProfileData({
-          ...created?.data,
-          email,
-          phone,
-        });
-        setMessage('Profile created successfully.');
-      } else {
-        const updated = await updateOwnPatientProfile(form);
-        applyProfileData({
-          ...updated?.data,
-          email,
-          phone,
-        });
-        setMessage('Profile updated successfully.');
-      }
-    } catch (e) {
-      setError(e?.userMessage || 'Could not save profile. Please check inputs and retry.');
-    } finally {
-      setSaving(false);
+    if (!profileExists) {
+      createMutation.mutate({ ...form, health_id: healthIdInput });
+    } else {
+      updateMutation.mutate(form);
     }
   };
+
+  const loading = profileQuery.isLoading;
+  const saving = createMutation.isPending || updateMutation.isPending;
+  const conditionsLoading = conditionsQuery.isLoading;
+  const allergiesLoading = allergiesQuery.isLoading;
+  const conditions = conditionsQuery.data?.data || [];
+  const allergies = allergiesQuery.data?.data || [];
+  const error = errorLocal;
 
   const completionFields = [form.full_name, form.date_of_birth, form.gender, form.blood_group].filter(Boolean).length;
   const completionPercent = Math.round((completionFields / 4) * 100);
@@ -133,6 +130,8 @@ function PatientProfilePage() {
   if (loading) {
     return <p className="patient-empty">Loading profile...</p>;
   }
+
+  const activeConditions = conditions.filter((c) => c.status === 'active');
 
   return (
     <section className="patient-profile-v2-grid">
@@ -289,8 +288,105 @@ function PatientProfilePage() {
         ) : null}
         {error ? <p className="patient-soft-error">{error}</p> : null}
       </article>
+
+      {/* ── Active Conditions Section ────────────────────────────────────────── */}
+      <article className="patient-profile-readonly-card">
+        <div className="panel-head">
+          <h3>Active Conditions</h3>
+          <span className="luxe-pill-tag">Long-term History</span>
+        </div>
+
+        <p className="patient-inline-note">
+          Your chronic conditions as managed by your doctors. View-only.
+        </p>
+
+        {conditionsLoading ? <p className="muted">Loading conditions...</p> : null}
+
+        {!conditionsLoading && activeConditions.length === 0 ? (
+          <div className="luxe-empty-mini">
+            <ClipboardList size={18} />
+            <p>No active conditions on record.</p>
+          </div>
+        ) : null}
+
+        {activeConditions.length > 0 ? (
+          <div className="profile-readonly-list">
+            {activeConditions.map((item) => (
+              <div key={item.id} className="profile-readonly-item">
+                <div className="profile-readonly-item-head">
+                  <ShieldCheck size={15} />
+                  <strong>{item.condition_name}</strong>
+                </div>
+                <div className="profile-readonly-item-meta">
+                  <span
+                    className={`status-pill ${
+                      item.status === 'active' ? 'success' : item.status === 'managed' ? 'warn' : 'neutral'
+                    }`}
+                  >
+                    {titleCase(item.status)}
+                  </span>
+                  <span className="condition-date-chip">
+                    <CalendarDays size={12} /> {item.diagnosed_date ? formatDate(item.diagnosed_date) : 'Date not set'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </article>
+
+      {/* ── Allergies Section ────────────────────────────────────────────────── */}
+      <article className="patient-profile-readonly-card">
+        <div className="panel-head">
+          <h3>Allergies</h3>
+          <span className="luxe-pill-tag">Risk Profile</span>
+        </div>
+
+        <p className="patient-inline-note">
+          Your recorded allergens and their severity. Manage allergies from the Allergies page.
+        </p>
+
+        {allergiesLoading ? <p className="muted">Loading allergies...</p> : null}
+
+        {!allergiesLoading && allergies.length === 0 ? (
+          <div className="luxe-empty-mini">
+            <FlaskConical size={18} />
+            <p>No allergies recorded yet.</p>
+          </div>
+        ) : null}
+
+        {allergies.length > 0 ? (
+          <div className="profile-readonly-list">
+            {allergies.map((item) => (
+              <div key={item.id} className="profile-readonly-item">
+                <div className="profile-readonly-item-head">
+                  <ShieldAlert size={15} />
+                  <strong>{item.allergen}</strong>
+                </div>
+                <div className="profile-readonly-item-meta">
+                  <span
+                    className={`status-pill ${
+                      item.severity === 'severe' ? 'danger' : item.severity === 'moderate' ? 'warn' : 'neutral'
+                    }`}
+                  >
+                    {titleCase(item.severity)} Risk
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {allergies.filter((a) => a.severity === 'severe').length > 0 ? (
+          <div className="profile-severe-alert">
+            <AlertTriangle size={14} />
+            <span>{allergies.filter((a) => a.severity === 'severe').length} severe allergy alert(s)</span>
+          </div>
+        ) : null}
+      </article>
     </section>
   );
 }
 
 export default PatientProfilePage;
+

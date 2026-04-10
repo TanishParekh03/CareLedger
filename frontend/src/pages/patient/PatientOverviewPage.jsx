@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, CalendarClock, Stethoscope, UserPlus2, Waves } from 'lucide-react';
 import {
   Area,
@@ -24,48 +25,20 @@ import { formatDate, titleCase } from '../../utils/formatters';
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
 function PatientOverviewPage() {
-  const location = useLocation();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [profile, setProfile] = useState(null);
-  const [consultations, setConsultations] = useState([]);
-  const [allergies, setAllergies] = useState([]);
-  const [conditions, setConditions] = useState([]);
-  const [accessList, setAccessList] = useState([]);
+  const profileQuery = useQuery({ queryKey: ['patient-profile'], queryFn: getOwnPatientProfile });
+  const consultQuery = useQuery({ queryKey: ['patient-consultations'], queryFn: getPatientConsultations });
+  const allergyQuery = useQuery({ queryKey: ['patient-allergies'], queryFn: getAllergies });
+  const conditionQuery = useQuery({ queryKey: ['patient-conditions'], queryFn: getChronicConditions });
+  const accessQuery = useQuery({ queryKey: ['patient-access-list'], queryFn: getPatientAccessList });
 
-  useEffect(() => {
-    const run = async () => {
-      setLoading(true);
-      setError('');
+  const loading = profileQuery.isLoading || consultQuery.isLoading || allergyQuery.isLoading || conditionQuery.isLoading || accessQuery.isLoading;
+  const error = (profileQuery.error && profileQuery.error?.response?.status !== 404) ? 'Unable to fully sync overview right now. Showing available data.' : '';
 
-      const [profileRes, consultRes, allergyRes, conditionRes, accessRes] = await Promise.allSettled([
-        getOwnPatientProfile(),
-        getPatientConsultations(),
-        getAllergies(),
-        getChronicConditions(),
-        getPatientAccessList(),
-      ]);
-
-      if (profileRes.status === 'fulfilled') {
-        setProfile(profileRes.value?.data || null);
-      } else {
-        const status = profileRes.reason?.response?.status;
-        if (status !== 404) {
-          setError('Unable to fully sync overview right now. Showing available data.');
-        }
-        setProfile(null);
-      }
-
-      setConsultations(consultRes.status === 'fulfilled' ? consultRes.value?.data || [] : []);
-      setAllergies(allergyRes.status === 'fulfilled' ? allergyRes.value?.data || [] : []);
-      setConditions(conditionRes.status === 'fulfilled' ? conditionRes.value?.data || [] : []);
-      setAccessList(accessRes.status === 'fulfilled' ? accessRes.value?.data || [] : []);
-
-      setLoading(false);
-    };
-
-    run();
-  }, [location.key]);
+  const profile = profileQuery.data?.data || null;
+  const consultations = consultQuery.data?.data || [];
+  const allergies = allergyQuery.data?.data || [];
+  const conditions = conditionQuery.data?.data || [];
+  const accessList = accessQuery.data?.data || [];
 
   const activeAccessDoctors = useMemo(
     () => accessList.filter((row) => String(row.status).toLowerCase() === 'active'),

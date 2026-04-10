@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -35,30 +36,38 @@ function DoctorEmergencyPage() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const [clinics, setClinics] = useState([]);
   const [clinicId, setClinicId] = useState('');
-
   const [criticalData, setCriticalData] = useState(null);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState({ type: '', text: '' });
 
+  const { data: clinicsRes } = useQuery({
+    queryKey: ['clinics'],
+    queryFn: getDoctorClinics,
+  });
+  const clinics = clinicsRes?.data || [];
+  
   const selectedClinic = useMemo(() => clinics.find((c) => c.id === clinicId) || null, [clinics, clinicId]);
 
   useEffect(() => {
-    const loadClinics = async () => {
+    if (!clinicId && clinics.length > 0) {
+      setClinicId(clinics[0].id);
+    }
+  }, [clinics, clinicId]);
+
+  useEffect(() => {
+    const initialLoad = async () => {
+      setSearching(true);
       try {
-        const response = await getDoctorClinics();
-        const all = response?.data || [];
-        setClinics(all);
-        if (all.length > 0) {
-          setClinicId(all[0].id);
-        }
-      } catch {
-        setClinics([]);
+        const data = await searchPatientsForConsultation('', 12);
+        setResults(data);
+      } catch (error) {
+        setResults([]);
+      } finally {
+        setSearching(false);
       }
     };
-
-    loadClinics();
+    initialLoad();
   }, []);
 
   const runSearch = async (event) => {

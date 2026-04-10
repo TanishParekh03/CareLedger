@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CalendarDays, ClipboardList, PencilLine, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ClipboardList, ShieldCheck } from 'lucide-react';
 import {
-  createChronicCondition,
-  deleteChronicCondition,
   getChronicConditions,
-  updateChronicCondition,
 } from '../../api/patients';
-import { LuxeDateField } from '../../components/common/LuxeDatePickers';
-import { formatDate, titleCase, toDateInputValue } from '../../utils/formatters';
-
-const INITIAL_FORM = { condition_name: '', status: 'active', diagnosed_date: '' };
+import { formatDate, titleCase } from '../../utils/formatters';
 
 function getFriendlyMessage(error, fallback) {
   const status = error?.response?.status;
@@ -23,8 +17,6 @@ function getFriendlyMessage(error, fallback) {
 
 function PatientConditionsPage() {
   const [items, setItems] = useState([]);
-  const [form, setForm] = useState(INITIAL_FORM);
-  const [editingId, setEditingId] = useState('');
   const [notice, setNotice] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
 
@@ -49,39 +41,6 @@ function PatientConditionsPage() {
     load();
   }, []);
 
-  const reset = () => {
-    setForm(INITIAL_FORM);
-    setEditingId('');
-  };
-
-  const onSubmit = async (event) => {
-    event.preventDefault();
-    setNotice({ type: '', text: '' });
-    try {
-      if (editingId) {
-        await updateChronicCondition(editingId, form);
-      } else {
-        await createChronicCondition(form);
-      }
-      reset();
-      setNotice({ type: 'success', text: editingId ? 'Condition updated.' : 'Condition added.' });
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to save condition right now.') });
-    }
-  };
-
-  const onDelete = async (id) => {
-    if (!window.confirm('Delete this chronic condition?')) return;
-    try {
-      await deleteChronicCondition(id);
-      setNotice({ type: 'success', text: 'Condition deleted.' });
-      load();
-    } catch (e) {
-      setNotice({ type: 'error', text: getFriendlyMessage(e, 'Unable to delete condition right now.') });
-    }
-  };
-
   const activeCount = items.filter((item) => item.status === 'active').length;
   const managedCount = items.filter((item) => item.status === 'managed').length;
   const resolvedCount = items.filter((item) => item.status === 'resolved').length;
@@ -90,40 +49,15 @@ function PatientConditionsPage() {
     <section className="patient-page-luxe">
       <div className="panel luxe-section-card">
         <div className="panel-head">
-          <h3>{editingId ? 'Edit Chronic Condition' : 'Add Chronic Condition'}</h3>
+          <h3>Chronic Conditions</h3>
           <span className="luxe-pill-tag">Long-term History</span>
         </div>
 
         <p className="patient-inline-note">
-          Keep your long-term health history current so doctors can tailor safer treatment plans.
+          Your chronic conditions are managed by your doctors. Contact your doctor to update this information.
         </p>
 
-        <form className="inline-form" onSubmit={onSubmit}>
-          <input
-            placeholder="Condition Name"
-            value={form.condition_name}
-            onChange={(e) => setForm((prev) => ({ ...prev, condition_name: e.target.value }))}
-            required
-          />
-          <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
-            <option value="active">Active</option>
-            <option value="managed">Managed</option>
-            <option value="resolved">Resolved</option>
-          </select>
-          <LuxeDateField
-            value={form.diagnosed_date}
-            onChange={(value) => setForm((prev) => ({ ...prev, diagnosed_date: value }))}
-            placeholder="Diagnosed date"
-          />
-          <button className="submit-btn slim" type="submit">
-            {editingId ? 'Update' : 'Add'}
-          </button>
-          {editingId ? (
-            <button type="button" className="text-btn" onClick={reset}>
-              Cancel
-            </button>
-          ) : null}
-        </form>
+        {/* ── Add/Edit form removed — patients should not add chronic conditions ── */}
 
         <div className="luxe-chip-row">
           <span>{activeCount} Active</span>
@@ -174,25 +108,7 @@ function PatientConditionsPage() {
                   </span>
                 </div>
 
-                <div className="condition-record-actions">
-                  <button
-                    type="button"
-                    className="condition-action-btn"
-                    onClick={() => {
-                      setEditingId(item.id);
-                      setForm({
-                        condition_name: item.condition_name,
-                        status: item.status,
-                        diagnosed_date: toDateInputValue(item.diagnosed_date),
-                      });
-                    }}
-                  >
-                    <PencilLine size={14} /> Edit
-                  </button>
-                  <button type="button" className="condition-action-btn danger" onClick={() => onDelete(item.id)}>
-                    <Trash2 size={14} /> Delete
-                  </button>
-                </div>
+                {/* ── Edit/Delete actions removed — read-only for patients ── */}
               </article>
             ))}
           </div>

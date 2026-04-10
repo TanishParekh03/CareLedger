@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Activity, ArrowUpRight, CalendarClock, ClipboardCheck, Stethoscope, UserRoundCog, Waves } from 'lucide-react';
 import {
   Area,
@@ -19,42 +20,16 @@ import { formatDate, titleCase } from '../../utils/formatters';
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
 function DoctorOverviewPage() {
-  const location = useLocation();
-  const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState('');
-  const [profile, setProfile] = useState(null);
-  const [consultations, setConsultations] = useState([]);
-  const [clinics, setClinics] = useState([]);
+  const profileQuery = useQuery({ queryKey: ['doctor-profile'], queryFn: getDoctorProfile });
+  const consultQuery = useQuery({ queryKey: ['doctor-consultationLog'], queryFn: getDoctorConsultations });
+  const clinicsQuery = useQuery({ queryKey: ['clinics'], queryFn: getDoctorClinics });
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setNotice('');
+  const loading = profileQuery.isLoading || consultQuery.isLoading || clinicsQuery.isLoading;
+  const notice = (profileQuery.isError && profileQuery.error?.response?.status !== 404) ? 'Unable to fully sync doctor dashboard right now. Showing available data.' : '';
 
-      const [profileRes, consultationRes, clinicsRes] = await Promise.allSettled([
-        getDoctorProfile(),
-        getDoctorConsultations(),
-        getDoctorClinics(),
-      ]);
-
-      if (profileRes.status === 'fulfilled') {
-        setProfile(profileRes.value?.data || null);
-      } else {
-        const status = profileRes.reason?.response?.status;
-        if (status !== 404) {
-          setNotice('Unable to fully sync doctor dashboard right now. Showing available data.');
-        }
-        setProfile(null);
-      }
-
-      setConsultations(consultationRes.status === 'fulfilled' ? consultationRes.value?.data || [] : []);
-      setClinics(clinicsRes.status === 'fulfilled' ? clinicsRes.value?.data || [] : []);
-
-      setLoading(false);
-    };
-
-    load();
-  }, [location.key]);
+  const profile = profileQuery.data?.data || null;
+  const consultations = consultQuery.data?.data || [];
+  const clinics = clinicsQuery.data?.data || [];
 
   const now = Date.now();
 

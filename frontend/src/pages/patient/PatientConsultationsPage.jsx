@@ -1,47 +1,32 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { getPrescriptionByConsultationId } from '../../api/consultations';
 import { getPatientConsultations } from '../../api/patients';
 import { formatDate, titleCase } from '../../utils/formatters';
 
 function PatientConsultationsPage() {
-  const [consultations, setConsultations] = useState([]);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [prescription, setPrescription] = useState(null);
-  const [prescriptionError, setPrescriptionError] = useState('');
+  const [selectedConsultation, setSelectedConsultation] = useState(null);
 
-  useEffect(() => {
-    const run = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const response = await getPatientConsultations();
-        setConsultations(response?.data || []);
-      } catch (e) {
-        setError(e?.response?.data?.error?.message || 'Failed to load consultations.');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const { data: consultationsRes, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ['patient-consultations'],
+    queryFn: getPatientConsultations,
+  });
+  const consultations = consultationsRes?.data || [];
+  const error = fetchError ? fetchError?.response?.data?.error?.message || 'Failed to load consultations.' : '';
 
-    run();
-  }, []);
+  const { data: prescriptionRes, isLoading: prescriptionLoading, error: presError } = useQuery({
+    queryKey: ['prescription', selectedConsultation?.id],
+    queryFn: () => getPrescriptionByConsultationId(selectedConsultation.id),
+    enabled: !!selectedConsultation?.id,
+    retry: false
+  });
+  const prescription = prescriptionRes?.data || null;
+  const prescriptionError = presError ? presError?.response?.data?.error?.message || 'Prescription could not be loaded.' : '';
 
-  const openPrescription = async (consultationId) => {
-    setPrescription(null);
-    setPrescriptionError('');
+  const openPrescription = (row) => {
+    setSelectedConsultation(row);
     setModalOpen(true);
-
-    try {
-      const response = await getPrescriptionByConsultationId(consultationId);
-      setPrescription(response?.data || null);
-    } catch (e) {
-      setPrescriptionError(
-        e?.response?.data?.error?.message ||
-          'Prescription could not be loaded from this account context.'
-      );
-    }
   };
 
   return (
@@ -74,8 +59,8 @@ function PatientConsultationsPage() {
                 </span>
               </td>
               <td>
-                <button type="button" className="text-btn" onClick={() => openPrescription(row.id)}>
-                  View Prescription
+                <button type="button" className="text-btn" onClick={() => openPrescription(row)}>
+                  View Details
                 </button>
               </td>
             </tr>
@@ -94,13 +79,22 @@ function PatientConsultationsPage() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
             <div className="panel-head split">
-              <h3>Prescription</h3>
+              <h3>Consultation Details</h3>
               <button className="text-btn" type="button" onClick={() => setModalOpen(false)}>
                 Close
               </button>
             </div>
 
-            {!prescription && !prescriptionError ? <p className="muted">Loading prescription...</p> : null}
+            {selectedConsultation ? (
+              <div style={{ marginBottom: '20px', padding: '12px', background: '#f9f9f6', borderRadius: '8px', border: '1px solid #eeedea', fontSize: '13px' }}>
+                <p style={{ margin: '0 0 6px 0' }}><strong>Started:</strong> {new Date(selectedConsultation.consultation_date).toLocaleString()}</p>
+                {selectedConsultation.updated_at && String(selectedConsultation.status).toLowerCase() === 'completed' ? (
+                  <p style={{ margin: 0 }}><strong>Ended:</strong> {new Date(selectedConsultation.updated_at).toLocaleString()}</p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!prescription && !prescriptionError ? <p className="muted">Loading details...</p> : null}
             {prescriptionError ? <p className="error-text">{prescriptionError}</p> : null}
 
             {prescription?.items?.length ? (
@@ -124,6 +118,15 @@ function PatientConsultationsPage() {
                   ))}
                 </tbody>
               </table>
+            ) : null}
+
+            {prescription?.doctor_notes ? (
+              <div style={{ marginTop: '20px' }}>
+                <h4 style={{ marginBottom: '10px' }}>Doctor Notes</h4>
+                <div style={{ padding: '12px', background: '#fcfcfb', borderRadius: '8px', border: '1px solid #eeedea', fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                  {prescription.doctor_notes}
+                </div>
+              </div>
             ) : null}
           </div>
         </div>

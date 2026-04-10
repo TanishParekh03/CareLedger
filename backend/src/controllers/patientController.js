@@ -97,7 +97,7 @@ async function getPatientById(req, res, next) {
       return errorResponse(res, 400, 'VALIDATION_ERROR', 'id must be a valid UUID');
     }
 
-    
+
     if (userRole === 'patient') {
       const ownProfile = await pool.query(
         `SELECT id FROM patients WHERE id = $1 AND user_id = $2`,
@@ -134,7 +134,7 @@ async function getPatientById(req, res, next) {
       return errorResponse(res, 403, 'FORBIDDEN', 'Unauthorized access');
     }
 
-  
+
     const patient = await pool.query(
       `SELECT
          p.id, p.full_name, p.health_id,
@@ -175,7 +175,7 @@ async function updateOwnProfile(req, res, next) {
       return errorResponse(res, 400, 'VALIDATION_ERROR', 'gender must be one of: male, female, other');
     }
 
-   
+
     const existing = await pool.query(
       `SELECT full_name, date_of_birth, gender, blood_group FROM patients WHERE user_id = $1`,
       [userId]
@@ -226,7 +226,7 @@ async function getOwnConsultations(req, res, next) {
 
     const consultations = await pool.query(
       `SELECT
-         c.id, c.doctor_id, c.consultation_date, c.status,
+         c.id, c.doctor_id, c.consultation_date, c.status, c.updated_at,
          d.full_name AS doctor_name, d.specialization, cl.clinic_name
        FROM consultations c
        JOIN doctors d ON d.id = c.doctor_id
@@ -243,6 +243,75 @@ async function getOwnConsultations(req, res, next) {
     );
 
     return successResponse(res, 200, consultations.rows, 'Operation successful.');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getOwnPrescription(req, res, next) {
+  try {
+    const { consultationId } = req.params;
+    const userId = req.user?.id;
+
+    if (!isUuid(consultationId)) {
+      return errorResponse(res, 400, 'VALIDATION_ERROR', 'consultationId must be a valid UUID');
+    }
+
+    if (req.user?.role !== 'patient') {
+      return errorResponse(res, 403, 'FORBIDDEN', 'Only patients can access this endpoint');
+    }
+
+    const patientProfile = await pool.query(
+      `SELECT id FROM patients WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (patientProfile.rowCount === 0) {
+      return errorResponse(res, 404, 'NOT_FOUND', 'Patient profile not found');
+    }
+    const patientId = patientProfile.rows[0].id;
+
+    const consultation = await pool.query(
+      `SELECT id FROM consultations WHERE id = $1 AND patient_id = $2`,
+      [consultationId, patientId]
+    );
+
+    if (consultation.rowCount === 0) {
+      return errorResponse(res, 404, 'NOT_FOUND', 'Consultation not found or access denied');
+    }
+
+    const q = await pool.query(
+      `select p.id AS prescription_id,
+         p.consultation_id,
+         p.patient_id,
+         p.doctor_id,
+         p.issued_at,
+         p.doctor_notes,
+         jsonb_agg(
+        json_build_object(
+            'drug_name', p_items.drug_name, 
+            'dosage', p_items.dosage, 
+            'frequency', p_items.frequency, 
+            'duration_days', p_items.duration_days
+        )
+      ) AS items
+       from prescriptions p
+       left join prescription_items p_items ON p_items.prescription_id = p.id
+       where p.consultation_id = $1
+       group by p.id, p.consultation_id, p.patient_id, p.doctor_id, p.issued_at`,
+      [consultationId]
+    );
+
+    if (q.rowCount === 0) {
+      return errorResponse(res, 404, 'NOT_FOUND', 'Prescription not found');
+    }
+
+    const result = q.rows[0];
+    if (result.items && result.items.length === 1 && result.items[0].drug_name === null) {
+      result.items = [];
+    }
+
+    return successResponse(res, 200, result, 'Operation successful.');
   } catch (err) {
     return next(err);
   }
@@ -265,7 +334,7 @@ async function grantDoctorAccess(req, res, next) {
       return errorResponse(res, 403, 'FORBIDDEN', 'Only patients can grant access');
     }
 
-  
+
     const patientProfile = await pool.query(
       `SELECT id FROM patients WHERE user_id = $1`,
       [userId]
@@ -277,7 +346,7 @@ async function grantDoctorAccess(req, res, next) {
 
     const patientId = patientProfile.rows[0].id;
 
-    
+
     const doctor = await pool.query(
       `SELECT id FROM doctors WHERE id = $1 AND is_verified = true`,
       [doctor_id]
@@ -287,26 +356,20 @@ async function grantDoctorAccess(req, res, next) {
       return errorResponse(res, 404, 'NOT_FOUND', 'Doctor not found or not verified');
     }
 
-    
-    const existing = await pool.query(
-      `SELECT id FROM access_permissions
-       WHERE patient_id = $1 AND doctor_id = $2 AND status = 'active'
-         AND (expires_at IS NULL OR expires_at > NOW())`,
-      [patientId, doctor_id]
-    );
 
-    if (existing.rowCount > 0) {
-      return errorResponse(res, 409, 'CONFLICT', 'Active access permission already exists for this doctor');
-    }
-
-    const inserted = await pool.query(
-      `INSERT INTO access_permissions (patient_id, doctor_id, status, expires_at)
-       VALUES ($1, $2, 'active', $3)
+    const upserted = await pool.query(
+      `INSERT INTO access_permissions (patient_id, doctor_id, status, expires_at, updated_at)
+       VALUES ($1, $2, 'active', $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (patient_id, doctor_id)
+       DO UPDATE SET
+         status = 'active',
+         expires_at = EXCLUDED.expires_at,
+         updated_at = CURRENT_TIMESTAMP
        RETURNING id, patient_id, doctor_id, status, expires_at, created_at`,
       [patientId, doctor_id, expires_at || null]
     );
 
-    return successResponse(res, 201, inserted.rows[0], 'Access granted successfully.');
+    return successResponse(res, 201, upserted.rows[0], 'Access granted successfully.');
   } catch (err) {
     return next(err);
   }
@@ -326,7 +389,7 @@ async function revokeDoctorAccess(req, res, next) {
       return errorResponse(res, 403, 'FORBIDDEN', 'Only patients can revoke access');
     }
 
-   
+
     const patientProfile = await pool.query(
       `SELECT id FROM patients WHERE user_id = $1`,
       [userId]
@@ -338,10 +401,10 @@ async function revokeDoctorAccess(req, res, next) {
 
     const patientId = patientProfile.rows[0].id;
 
- 
+
     const updated = await pool.query(
       `UPDATE access_permissions
-       SET status = 'revoked'
+       SET status = 'expired'
        WHERE patient_id = $1 AND doctor_id = $2 AND status = 'active'
        RETURNING id, patient_id, doctor_id, status`,
       [patientId, doctorId]
@@ -384,7 +447,7 @@ async function getAccessList(req, res, next) {
          d.full_name AS doctor_name, d.specialization, cl.clinic_name
        FROM access_permissions ap
        JOIN doctors d ON d.id = ap.doctor_id
-       LEFT JOIN C (
+       LEFT JOIN LATERAL (
          SELECT clinic_name
          FROM clinics
          WHERE doctor_id = d.id
@@ -408,6 +471,7 @@ module.exports = {
   getPatientById,
   updateOwnProfile,
   getOwnConsultations,
+  getOwnPrescription,
   grantDoctorAccess,
   revokeDoctorAccess,
   getAccessList,

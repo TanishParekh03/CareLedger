@@ -2,9 +2,6 @@ import client from './client';
 
 export async function searchPatientsForConsultation(query, limit = 10) {
   const trimmed = String(query || '').trim();
-  if (!trimmed) {
-    return [];
-  }
 
   const response = await client.get('/doctors/patients/search', {
     params: {
@@ -46,12 +43,39 @@ export async function getConsultationPrescription(consultationId) {
   return response.data;
 }
 
-export async function upsertConsultationPrescription(consultationId, items) {
-  const response = await client.post(`/consultations/${consultationId}/prescription`, { items });
+export async function upsertConsultationPrescription(consultationId, items, doctorNotes) {
+  const response = await client.post(`/consultations/${consultationId}/prescription`, {
+    items,
+    doctor_notes: doctorNotes || null,
+  });
   return response.data;
 }
 
 export async function updateConsultationStatus(consultationId, status) {
   const response = await client.put(`/consultations/${consultationId}/status`, { status });
+  return response.data;
+}
+
+export async function finalizeConsultation(consultationId, items, doctorNotes) {
+  const response = await client.post(`/consultations/${consultationId}/finalize`, {
+    items,
+    doctor_notes: doctorNotes || null,
+  });
+  return response.data;
+}
+
+// Doctor-side chronic condition CRUD
+export async function createPatientCondition(consultationId, data) {
+  const response = await client.post(`/consultations/${consultationId}/conditions`, data);
+  return response.data;
+}
+
+export async function updatePatientCondition(consultationId, conditionId, data) {
+  const response = await client.put(`/consultations/${consultationId}/conditions/${conditionId}`, data);
+  return response.data;
+}
+
+export async function deletePatientCondition(consultationId, conditionId) {
+  const response = await client.delete(`/consultations/${consultationId}/conditions/${conditionId}`);
   return response.data;
 }
