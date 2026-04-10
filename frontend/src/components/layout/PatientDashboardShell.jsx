@@ -6,6 +6,7 @@ import {
   HeartPulse,
   LogOut,
   Menu,
+  Pill,
   ShieldPlus,
   Siren,
   Stethoscope,
@@ -20,9 +21,11 @@ const NAV_ITEMS = [
   { to: '/dashboard/patient', label: 'Overview', caption: 'Today at a glance', icon: User },
   { to: '/dashboard/patient/profile', label: 'Profile', caption: 'Identity and blood group', icon: UserRoundCheck },
   { to: '/dashboard/patient/access', label: 'Doctor Access', caption: 'Grant or revoke visibility', icon: ShieldPlus },
+  { to: '/dashboard/patient/active-medications', label: 'Active Medications', caption: 'Current prescriptions in use', icon: Pill },
   { to: '/dashboard/patient/allergies', label: 'Allergies', caption: 'Risk triggers and severity', icon: HeartPulse },
   { to: '/dashboard/patient/emergency-contacts', label: 'Emergency', caption: 'Immediate contact chain', icon: Siren },
   { to: '/dashboard/patient/consultations', label: 'Consultations', caption: 'Recent and ongoing visits', icon: Stethoscope },
+  { to: '/dashboard/patient/legacy-documents', label: 'Legacy Upload', caption: 'Import old documents via OCR', icon: CloudCog },
 ];
 
 function PatientDashboardShell() {

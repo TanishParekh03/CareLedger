@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Building2, Mail, MapPin, PencilLine, Phone, Trash2 } from 'lucide-react';
 import { createClinic, deleteClinic, getDoctorClinics, updateClinic } from '../../api/clinics';
 
@@ -21,31 +22,45 @@ function toFriendlyMessage(error, fallback) {
 }
 
 function DoctorClinicsPage() {
-  const [clinics, setClinics] = useState([]);
+  const queryClient = useQueryClient();
   const [form, setForm] = useState(INITIAL_FORM);
   const [editingId, setEditingId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState('');
   const [notice, setNotice] = useState({ type: '', text: '' });
 
-  const load = async () => {
-    setLoading(true);
-    setNotice({ type: '', text: '' });
-    try {
-      const response = await getDoctorClinics();
-      setClinics(response?.data || []);
-    } catch (e) {
-      setClinics([]);
-      setNotice({ type: 'error', text: toFriendlyMessage(e, 'Unable to load clinics right now.') });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: clinicsRes,
+    isLoading: loading,
+    isFetching: refreshing,
+    error: loadError,
+  } = useQuery({
+    queryKey: ['clinics'],
+    queryFn: getDoctorClinics,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+  });
+
+  const clinics = clinicsRes?.data || [];
+
+  const createClinicMutation = useMutation({
+    mutationFn: createClinic,
+  });
+
+  const updateClinicMutation = useMutation({
+    mutationFn: ({ id, payload }) => updateClinic(id, payload),
+  });
+
+  const deleteClinicMutation = useMutation({
+    mutationFn: deleteClinic,
+  });
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!loadError) return;
+    setNotice({ type: 'error', text: toFriendlyMessage(loadError, 'Unable to load clinics right now.') });
+  }, [loadError]);
+
+  const saving = createClinicMutation.isPending || updateClinicMutation.isPending;
 
   const resetForm = () => {
     setForm(INITIAL_FORM);
@@ -54,23 +69,20 @@ function DoctorClinicsPage() {
 
   const onSubmit = async (event) => {
     event.preventDefault();
-    setSaving(true);
     setNotice({ type: '', text: '' });
 
     try {
       if (editingId) {
-        await updateClinic(editingId, form);
+        await updateClinicMutation.mutateAsync({ id: editingId, payload: form });
         setNotice({ type: 'success', text: 'Clinic updated successfully.' });
       } else {
-        await createClinic(form);
+        await createClinicMutation.mutateAsync(form);
         setNotice({ type: 'success', text: 'Clinic added successfully.' });
       }
       resetForm();
-      load();
+      await queryClient.invalidateQueries({ queryKey: ['clinics'] });
     } catch (e) {
       setNotice({ type: 'error', text: toFriendlyMessage(e, 'Unable to save clinic right now.') });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -84,12 +96,12 @@ function DoctorClinicsPage() {
     setNotice({ type: '', text: '' });
 
     try {
-      await deleteClinic(id);
+      await deleteClinicMutation.mutateAsync(id);
       if (editingId === id) {
         resetForm();
       }
       setNotice({ type: 'success', text: 'Clinic deleted successfully.' });
-      load();
+      await queryClient.invalidateQueries({ queryKey: ['clinics'] });
     } catch (e) {
       setNotice({ type: 'error', text: toFriendlyMessage(e, 'Unable to delete clinic right now.') });
     } finally {
@@ -171,7 +183,9 @@ function DoctorClinicsPage() {
       <article className="doctor-card">
         <div className="panel-head">
           <h3>Clinics</h3>
-          <span className="luxe-subtle-count">{clinics.length} items</span>
+          <span className="luxe-subtle-count">
+            {clinics.length} items{refreshing ? ' (refreshing...)' : ''}
+          </span>
         </div>
 
         {loading ? <p className="muted">Loading clinics...</p> : null}

@@ -30,8 +30,8 @@ function toFriendlyMessage(error, fallback) {
 
 function DoctorEmergencyPage() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
 
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,6 +40,21 @@ function DoctorEmergencyPage() {
   const [criticalData, setCriticalData] = useState(null);
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState({ type: '', text: '' });
+
+  const trimmedQuery = String(submittedQuery || '').trim();
+  const searchQueryCacheKey = trimmedQuery.toLowerCase();
+
+  const {
+    data: results = [],
+    isFetching: searching,
+    error: searchError,
+  } = useQuery({
+    queryKey: ['doctorPatientSearch', searchQueryCacheKey, 12],
+    queryFn: () => searchPatientsForConsultation(trimmedQuery, 12),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+  });
 
   const { data: clinicsRes } = useQuery({
     queryKey: ['clinics'],
@@ -56,37 +71,22 @@ function DoctorEmergencyPage() {
   }, [clinics, clinicId]);
 
   useEffect(() => {
-    const initialLoad = async () => {
-      setSearching(true);
-      try {
-        const data = await searchPatientsForConsultation('', 12);
-        setResults(data);
-      } catch (error) {
-        setResults([]);
-      } finally {
-        setSearching(false);
-      }
-    };
-    initialLoad();
-  }, []);
+    if (!searchError) return;
+    setNotice({ type: 'error', text: toFriendlyMessage(searchError, 'Patient search failed. Please retry.') });
+  }, [searchError]);
 
-  const runSearch = async (event) => {
-    event?.preventDefault();
-    setSearching(true);
-    setNotice({ type: '', text: '' });
-
-    try {
-      const data = await searchPatientsForConsultation(query, 12);
-      setResults(data);
-      if (data.length === 0) {
-        setNotice({ type: 'error', text: 'No patients found for this search.' });
-      }
-    } catch (error) {
-      setResults([]);
-      setNotice({ type: 'error', text: toFriendlyMessage(error, 'Patient search failed. Please retry.') });
-    } finally {
-      setSearching(false);
+  useEffect(() => {
+    if (!hasSearched || searching || searchError) return;
+    if (results.length === 0) {
+      setNotice({ type: 'error', text: 'No patients found for this search.' });
     }
+  }, [hasSearched, searching, searchError, results]);
+
+  const runSearch = (event) => {
+    event?.preventDefault();
+    setNotice({ type: '', text: '' });
+    setHasSearched(true);
+    setSubmittedQuery(query);
   };
 
   const openPatientModal = (patient) => {

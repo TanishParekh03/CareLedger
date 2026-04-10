@@ -26,6 +26,30 @@ export async function getPatientConsultations() {
   return response.data;
 }
 
+export async function getPatientPrescriptions() {
+  const response = await apiClient.get('/patients/prescriptions');
+  return response.data;
+}
+
+export async function getPatientPrescriptionById(prescriptionId) {
+  const response = await apiClient.get(`/patients/prescriptions/${prescriptionId}`);
+  return response.data;
+}
+
+export async function uploadLegacyPrescriptionDocument(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await apiClient.post('/ocr/legacy-upload', formData, {
+    timeout: 1000 * 60 * 5,
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return response.data;
+}
+
 export async function getPatientAccessList() {
   const response = await apiClient.get('/patients/access-list');
   return response.data;
@@ -83,6 +107,11 @@ export async function deleteChronicCondition(id) {
 
 export async function getEmergencyInfo() {
   const response = await apiClient.get('/patients/emergency-info');
+  return response.data;
+}
+
+export async function getActiveMedications(userId) {
+  const response = await apiClient.get(`/medications/${userId}`);
   return response.data;
 }
 

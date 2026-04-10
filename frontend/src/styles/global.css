@@ -4873,3 +4873,373 @@ input {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* Patient active medications */
+
+.active-medications-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.active-medications-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #ecebe6;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.active-medications-table {
+  min-width: 860px;
+}
+
+.active-medications-table th,
+.active-medications-table td {
+  vertical-align: middle;
+}
+
+.active-medications-sn,
+.active-medications-doctor,
+.active-medications-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2a2d33;
+}
+
+.active-medications-sn {
+  font-weight: 700;
+}
+
+.active-medications-doctor,
+.active-medications-date {
+  color: #4a4d56;
+}
+
+
+/* Consultation workspace revamp */
+
+.consult-workspace-body.details-open {
+  grid-template-columns: minmax(0, 1.28fr) minmax(340px, 0.92fr);
+}
+
+.consult-workspace-body.details-hidden {
+  grid-template-columns: minmax(0, 1.1fr) minmax(420px, 0.9fr);
+}
+
+.consult-rx-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.consult-patient-details-column {
+  min-width: 0;
+}
+
+.consult-preview-column {
+  min-width: 0;
+}
+
+.consult-section-preview {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.consult-detail-toggle-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.consult-section-resizable {
+  resize: vertical;
+  overflow: auto;
+  min-height: 260px;
+}
+
+.consult-section-prescription.consult-section-resizable {
+  min-height: 420px;
+}
+
+.consult-section-notes.consult-section-resizable {
+  min-height: 320px;
+}
+
+.prescription-row {
+  grid-template-columns: 1.1fr 0.8fr 0.9fr 1fr 0.65fr auto;
+}
+
+.consult-section-allergies,
+.consult-section-medications {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.consult-medication-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eeede8;
+}
+
+.consult-medication-form input {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid #d8d8d1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  outline: none;
+}
+
+.consult-medication-form input:focus {
+  border-color: rgba(26, 74, 74, 0.5);
+  box-shadow: 0 0 0 3px rgba(26, 74, 74, 0.08);
+}
+
+.consult-medication-form button {
+  justify-self: start;
+}
+
+.consult-allergy-list,
+.consult-medication-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.consult-allergy-card,
+.consult-medication-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ecebe6;
+  background: #fbfbf9;
+}
+
+.consult-allergy-card strong,
+.consult-medication-card strong {
+  font-size: 13px;
+}
+
+.consult-medication-card p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.consult-medication-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.consult-medication-card small {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.consult-medication-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.consult-medication-action-btn {
+  border: 1px solid rgba(26, 74, 74, 0.16);
+  background: #ffffff;
+  color: var(--teal);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.consult-medication-action-btn.danger {
+  border-color: rgba(232, 64, 64, 0.2);
+  color: var(--danger);
+}
+
+.consult-action-feedback {
+  margin: 10px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.consult-action-feedback.success {
+  color: #0f6a49;
+  background: rgba(46, 204, 138, 0.12);
+  border: 1px solid rgba(46, 204, 138, 0.2);
+}
+
+.consult-action-feedback.error {
+  color: #8a2121;
+  background: rgba(232, 64, 64, 0.12);
+  border: 1px solid rgba(232, 64, 64, 0.2);
+}
+
+/* Patient legacy OCR upload */
+
+.legacy-upload-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.legacy-upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.legacy-upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.legacy-upload-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 168px;
+  border: 1px dashed rgba(26, 74, 74, 0.35);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(26, 74, 74, 0.04), rgba(26, 74, 74, 0.01));
+  color: #2f4652;
+  text-align: center;
+  cursor: pointer;
+}
+
+.legacy-upload-dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.legacy-upload-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 74, 74, 0.14);
+  color: var(--teal);
+}
+
+.legacy-upload-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.legacy-upload-caption {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legacy-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(26, 74, 74, 0.18);
+  background: #f7fbfa;
+  font-size: 12px;
+  color: #2f4652;
+}
+
+.legacy-file-chip span {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legacy-file-chip small {
+  color: var(--muted);
+}
+
+.legacy-context-line {
+  margin: 0;
+}
+
+.legacy-import-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 16px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #ecebe6;
+  border-radius: 12px;
+  background: #fbfbf9;
+}
+
+.legacy-import-meta p {
+  margin: 0;
+  font-size: 12px;
+  color: #2f4652;
+}
+
+.legacy-notes {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #2f4652;
+}
+
+@media (max-width: 1180px) {
+  .consult-workspace-body {
+    grid-template-columns: 1fr;
+  }
+
+  .consult-section-resizable {
+    resize: none;
+  }
+
+  .consult-medication-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .prescription-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .prescription-row > button {
+    grid-column: 2;
+    justify-self: end;
+  }
+}

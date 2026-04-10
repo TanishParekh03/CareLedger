@@ -11,10 +11,12 @@ import DoctorEmergencyPage from './pages/doctor/DoctorEmergencyPage';
 import DoctorOverviewPage from './pages/doctor/DoctorOverviewPage';
 import DoctorProfilePage from './pages/doctor/DoctorProfilePage';
 import PatientAccessPage from './pages/patient/PatientAccessPage';
+import PatientActiveMedicationsPage from './pages/patient/PatientActiveMedicationsPage';
 import PatientAllergiesPage from './pages/patient/PatientAllergiesPage';
 import PatientConditionsPage from './pages/patient/PatientConditionsPage';
 import PatientConsultationsPage from './pages/patient/PatientConsultationsPage';
 import PatientEmergencyPage from './pages/patient/PatientEmergencyPage';
+import PatientLegacyDocumentsPage from './pages/patient/PatientLegacyDocumentsPage';
 import PatientOverviewPage from './pages/patient/PatientOverviewPage';
 import PatientProfilePage from './pages/patient/PatientProfilePage';
 
@@ -35,10 +37,12 @@ function App() {
         <Route index element={<PatientOverviewPage />} />
         <Route path="profile" element={<PatientProfilePage />} />
         <Route path="access" element={<PatientAccessPage />} />
+        <Route path="active-medications" element={<PatientActiveMedicationsPage />} />
         <Route path="allergies" element={<PatientAllergiesPage />} />
         <Route path="chronic-conditions" element={<PatientConditionsPage />} />
         <Route path="emergency-contacts" element={<PatientEmergencyPage />} />
         <Route path="consultations" element={<PatientConsultationsPage />} />
+        <Route path="legacy-documents" element={<PatientLegacyDocumentsPage />} />
       </Route>
       <Route
         path="/dashboard/doctor"

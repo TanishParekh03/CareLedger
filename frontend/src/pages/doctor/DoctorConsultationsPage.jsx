@@ -9,6 +9,7 @@ import {
   FileText,
   LoaderCircle,
   Notebook,
+  Pill,
   Plus,
   Search,
   ShieldAlert,
@@ -21,25 +22,30 @@ import {
 import { getDoctorClinics } from '../../api/clinics';
 import { getDoctorConsultations } from '../../api/doctors';
 import {
+  createPatientActiveMedication,
   createPatientCondition,
+  deletePatientActiveMedication,
   deletePatientCondition,
   finalizeConsultation,
   getConsultationPrescription,
+  getPatientSnapshotActiveMedications,
   getPatientSnapshotAllergies,
   getPatientSnapshotConditions,
   getPatientSnapshotEmergency,
   getPatientSnapshotProfile,
   searchPatientsForConsultation,
   startConsultation,
+  updatePatientActiveMedication,
   updatePatientCondition,
   upsertConsultationPrescription,
 } from '../../api/doctorConsultations';
-import { formatDate, titleCase } from '../../utils/formatters';
+import { formatDate, titleCase, toDateInputValue } from '../../utils/formatters';
 
 const EMPTY_ITEM = {
   drug_name: '',
   dosage: '',
   frequency: '',
+  prescribed_for: '',
   duration_days: '',
 };
 
@@ -47,6 +53,13 @@ const INITIAL_CONDITION_FORM = {
   condition_name: '',
   status: 'active',
   diagnosed_date: '',
+};
+
+const INITIAL_ACTIVE_MEDICATION_FORM = {
+  name: '',
+  dosage: '',
+  prescibed_for: '',
+  prescibed_at: '',
 };
 
 function toFriendlyMessage(error, fallback) {
@@ -75,8 +88,8 @@ function DoctorConsultationsPage() {
 
   // ── Search state ──
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
 
   // ── Confirmation modal ──
   const [confirmPatient, setConfirmPatient] = useState(null);
@@ -85,12 +98,14 @@ function DoctorConsultationsPage() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [consultationId, setConsultationId] = useState('');
+  const [showPatientDetails, setShowPatientDetails] = useState(true);
 
   // ── Snapshot ──
   const [snapshot, setSnapshot] = useState({
     profile: null,
     allergies: [],
     conditions: [],
+    activeMedications: [],
     emergency: [],
   });
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -107,6 +122,10 @@ function DoctorConsultationsPage() {
   const [conditionForm, setConditionForm] = useState({ ...INITIAL_CONDITION_FORM });
   const [editingConditionId, setEditingConditionId] = useState('');
 
+  // ── Active medications (doctor-editable) ──
+  const [activeMedicationForm, setActiveMedicationForm] = useState({ ...INITIAL_ACTIVE_MEDICATION_FORM });
+  const [editingMedicationId, setEditingMedicationId] = useState('');
+
   // ── Past consultation detail modal ──
   const [pastDetail, setPastDetail] = useState(null);
   const [pastDetailLoading, setPastDetailLoading] = useState(false);
@@ -115,6 +134,21 @@ function DoctorConsultationsPage() {
   // ── General ──
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState({ type: '', text: '' });
+
+  const trimmedSearchQuery = String(submittedQuery || '').trim();
+  const searchQueryCacheKey = trimmedSearchQuery.toLowerCase();
+
+  const {
+    data: results = [],
+    isFetching: searching,
+    error: searchError,
+  } = useQuery({
+    queryKey: ['doctorPatientSearch', searchQueryCacheKey, 12],
+    queryFn: () => searchPatientsForConsultation(trimmedSearchQuery, 12),
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: false,
+  });
 
   const { data: consultationLogRes, isLoading: loadingConsultationLog } = useQuery({
     queryKey: ['consultationLog'],
@@ -139,19 +173,23 @@ function DoctorConsultationsPage() {
   }, [clinics, clinicId]);
 
   useEffect(() => {
-    const initialLoad = async () => {
-      setSearching(true);
-      try {
-        const data = await searchPatientsForConsultation('', 12);
-        setResults(data);
-      } catch {
-        setResults([]);
-      } finally {
-        setSearching(false);
-      }
-    };
-    initialLoad();
-  }, []);
+    if (!searchError) return;
+    setNotice({ type: 'error', text: toFriendlyMessage(searchError, 'Patient search failed.') });
+  }, [searchError]);
+
+  useEffect(() => {
+    if (!hasSearched || searching || searchError) return;
+    if (results.length === 0) {
+      setNotice({ type: 'error', text: 'No patients found for this search.' });
+    }
+  }, [hasSearched, searching, searchError, results]);
+
+  const syncPatientInSearchCache = (patientId, updater) => {
+    queryClient.setQueriesData({ queryKey: ['doctorPatientSearch'] }, (oldData) => {
+      if (!Array.isArray(oldData)) return oldData;
+      return oldData.map((item) => (item.id === patientId ? updater(item) : item));
+    });
+  };
 
   // ── Auto-save to localStorage ──
   useEffect(() => {
@@ -173,16 +211,18 @@ function DoctorConsultationsPage() {
   const loadSnapshot = async (patientId) => {
     setLoadingSnapshot(true);
     try {
-      const [profileRes, allergyRes, conditionRes, emergencyRes] = await Promise.allSettled([
+      const [profileRes, allergyRes, conditionRes, emergencyRes, activeMedicationRes] = await Promise.allSettled([
         getPatientSnapshotProfile(patientId),
         getPatientSnapshotAllergies(patientId),
         getPatientSnapshotConditions(patientId),
         getPatientSnapshotEmergency(patientId),
+        getPatientSnapshotActiveMedications(patientId),
       ]);
       setSnapshot({
         profile: profileRes.status === 'fulfilled' ? profileRes.value?.data || null : null,
         allergies: allergyRes.status === 'fulfilled' ? allergyRes.value?.data || [] : [],
         conditions: conditionRes.status === 'fulfilled' ? conditionRes.value?.data || [] : [],
+        activeMedications: activeMedicationRes.status === 'fulfilled' ? activeMedicationRes.value?.data || [] : [],
         emergency: emergencyRes.status === 'fulfilled' ? emergencyRes.value?.data?.emergency_details || [] : [],
       });
     } finally {
@@ -194,9 +234,13 @@ function DoctorConsultationsPage() {
     try {
       const response = await getConsultationPrescription(nextConsultationId);
       const rows = Array.isArray(response?.data?.items)
-        ? response.data.items.filter((i) => i?.drug_name || i?.dosage || i?.frequency || i?.duration_days)
+        ? response.data.items.filter((i) => i?.drug_name || i?.dosage || i?.frequency || i?.prescribed_for || i?.duration_days)
         : [];
-      setItems(rows.length > 0 ? rows.map((i) => ({ ...EMPTY_ITEM, ...i })) : [{ ...EMPTY_ITEM }]);
+      setItems(
+        rows.length > 0
+          ? rows.map((i) => ({ ...EMPTY_ITEM, ...i, prescribed_for: i?.prescribed_for || '' }))
+          : [{ ...EMPTY_ITEM }]
+      );
       setDoctorNotes(response?.data?.doctor_notes || '');
     } catch {
       setItems([{ ...EMPTY_ITEM }]);
@@ -205,20 +249,11 @@ function DoctorConsultationsPage() {
   };
 
   // ── Search ──
-  const runSearch = async (event) => {
+  const runSearch = (event) => {
     event?.preventDefault();
-    setSearching(true);
     setNotice({ type: '', text: '' });
-    try {
-      const data = await searchPatientsForConsultation(query, 12);
-      setResults(data);
-      if (data.length === 0) setNotice({ type: 'error', text: 'No patients found for this search.' });
-    } catch (error) {
-      setResults([]);
-      setNotice({ type: 'error', text: toFriendlyMessage(error, 'Patient search failed.') });
-    } finally {
-      setSearching(false);
-    }
+    setHasSearched(true);
+    setSubmittedQuery(query);
   };
 
   // ── Patient card click → confirmation modal ──
@@ -249,9 +284,11 @@ function DoctorConsultationsPage() {
         active_consultation_id: nextConsultationId,
       };
 
-      setResults((prev) =>
-        prev.map((item) => (item.id === confirmPatient.id ? updatedPatient : item)),
-      );
+      syncPatientInSearchCache(confirmPatient.id, (item) => ({
+        ...item,
+        has_active_access: true,
+        active_consultation_id: nextConsultationId,
+      }));
 
       setConfirmPatient(null);
       openWorkspace(updatedPatient);
@@ -270,9 +307,10 @@ function DoctorConsultationsPage() {
     setSelectedPatient(row);
     setPdfPreviewHtml('');
     setNotice({ type: '', text: '' });
+    setShowPatientDetails(true);
 
     // Initial reset
-    let initialSnapshot = { profile: null, allergies: [], conditions: [], emergency: [] };
+    let initialSnapshot = { profile: null, allergies: [], conditions: [], activeMedications: [], emergency: [] };
     let initialItems = [{ ...EMPTY_ITEM }];
     let initialDoctorNotes = '';
     let hasFullCache = false;
@@ -284,7 +322,15 @@ function DoctorConsultationsPage() {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed.snapshot) initialSnapshot = parsed.snapshot;
+          if (parsed.snapshot) {
+            initialSnapshot = {
+              profile: parsed.snapshot?.profile || null,
+              allergies: parsed.snapshot?.allergies || [],
+              conditions: parsed.snapshot?.conditions || [],
+              activeMedications: parsed.snapshot?.activeMedications || [],
+              emergency: parsed.snapshot?.emergency || [],
+            };
+          }
           if (parsed.items && parsed.items.length > 0) initialItems = parsed.items;
           if (parsed.doctorNotes !== undefined) initialDoctorNotes = parsed.doctorNotes;
           if (parsed.clinicId) setClinicId(parsed.clinicId);
@@ -302,6 +348,8 @@ function DoctorConsultationsPage() {
     setDoctorNotes(initialDoctorNotes);
     setConditionForm({ ...INITIAL_CONDITION_FORM });
     setEditingConditionId('');
+    setActiveMedicationForm({ ...INITIAL_ACTIVE_MEDICATION_FORM });
+    setEditingMedicationId('');
 
     if (row.active_consultation_id) {
       const promises = [];
@@ -340,9 +388,10 @@ function DoctorConsultationsPage() {
         drug_name: String(item.drug_name || '').trim(),
         dosage: String(item.dosage || '').trim(),
         frequency: String(item.frequency || '').trim(),
+        prescribed_for: String(item.prescribed_for || '').trim(),
         duration_days: Number(item.duration_days),
       }))
-      .filter((item) => item.drug_name || item.dosage || item.frequency || Number.isFinite(item.duration_days));
+      .filter((item) => item.drug_name || item.dosage || item.frequency || item.prescribed_for || Number.isFinite(item.duration_days));
 
     const invalid = cleaned.some(
       (item) =>
@@ -357,6 +406,7 @@ function DoctorConsultationsPage() {
   };
 
   const savePrescription = async () => {
+    setNotice({ type: '', text: '' });
     if (!consultationId) {
       setNotice({ type: 'error', text: 'Start a consultation before saving prescription.' });
       return;
@@ -378,19 +428,21 @@ function DoctorConsultationsPage() {
   };
 
   // ── PDF generation ──
-  const generatePdf = () => {
+  const generatePdf = ({ notify = true } = {}) => {
+    setNotice({ type: '', text: '' });
+
     if (!consultationId) {
       setNotice({ type: 'error', text: 'Start a consultation before creating PDF.' });
-      return;
+      return null;
     }
     if (!selectedClinic) {
       setNotice({ type: 'error', text: 'Select a clinic before creating PDF.' });
-      return;
+      return null;
     }
     const payload = buildPayload();
     if (!payload.ok) {
       setNotice({ type: 'error', text: 'Complete medicine rows before creating PDF.' });
-      return;
+      return null;
     }
 
     const patientName = snapshot.profile?.full_name || selectedPatient?.full_name || 'Patient';
@@ -413,11 +465,47 @@ function DoctorConsultationsPage() {
             <td>${escapeHtml(item.drug_name)}</td>
             <td>${escapeHtml(item.dosage)}</td>
             <td>${escapeHtml(item.frequency)}</td>
+            <td>${escapeHtml(item.prescribed_for || '-')}</td>
             <td>${item.duration_days}</td>
           </tr>
         `,
       )
       .join('');
+
+    const continuedRows = (snapshot.activeMedications || [])
+      .map(
+        (medication, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${escapeHtml(medication.name || '-')}</td>
+            <td>${escapeHtml(medication.dosage || '-')}</td>
+            <td>${escapeHtml(medication.prescibed_for || '-')}</td>
+            <td>${escapeHtml(formatDate(medication.prescibed_at) || '-')}</td>
+          </tr>
+        `,
+      )
+      .join('');
+
+    const continuedMedicationsHtml = (snapshot.activeMedications || []).length > 0
+      ? `
+        <h3 class="rx-subtitle">Continued Medications</h3>
+        <table class="rx-table rx-table-continued">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Medicine</th>
+              <th>Dosage</th>
+              <th>Prescribed For</th>
+              <th>Since</th>
+            </tr>
+          </thead>
+          <tbody>${continuedRows}</tbody>
+        </table>
+      `
+      : `
+        <h3 class="rx-subtitle">Continued Medications</h3>
+        <p class="rx-subtext">No continued medications.</p>
+      `;
 
     const notesHtml = doctorNotes
       ? `<p class="rx-notes"><strong>Doctor's Notes:</strong> ${escapeHtml(doctorNotes)}</p>`
@@ -442,9 +530,12 @@ function DoctorConsultationsPage() {
             .rx-title { margin: 0 0 10px; font-size: 18px; letter-spacing: 0.02em; }
             .rx-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin-bottom: 14px; font-size: 12px; }
             .rx-meta p { margin: 0; }
+            .rx-subtitle { margin: 16px 0 8px; font-size: 14px; color: #223741; }
+            .rx-subtext { margin: 0; font-size: 12px; color: #546974; }
             .rx-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
             .rx-table th, .rx-table td { border: 1px solid #d2dde4; padding: 8px; text-align: left; font-size: 12px; }
             .rx-table th { background: #edf4f7; }
+            .rx-table-continued { margin-top: 6px; }
             .rx-notes { margin-top: 14px; font-size: 12px; color: #2f4652; }
             .rx-footer { margin-top: 18px; border-top: 1px dashed #b8c8d2; padding: 12px 16px 16px; display: grid; grid-template-columns: 1fr 220px; gap: 12px; align-items: end; }
             .rx-footer p { margin: 0; font-size: 12px; color: #395260; }
@@ -479,11 +570,14 @@ function DoctorConsultationsPage() {
                     <th>Medicine</th>
                     <th>Dosage</th>
                     <th>Frequency</th>
+                    <th>Prescribed For</th>
                     <th>Duration (days)</th>
                   </tr>
                 </thead>
                 <tbody>${itemRows}</tbody>
               </table>
+
+              ${continuedMedicationsHtml}
 
               ${notesHtml}
             </section>
@@ -499,27 +593,42 @@ function DoctorConsultationsPage() {
       </html>
     `;
 
+    setShowPatientDetails(false);
     setPdfPreviewHtml(html);
-    setNotice({ type: 'success', text: 'PDF preview generated.' });
+    if (notify) {
+      setNotice({ type: 'success', text: 'PDF preview generated and opened in preview panel.' });
+    }
+
+    return html;
   };
 
   const printPrescription = () => {
-    if (!pdfPreviewHtml) {
-      setNotice({ type: 'error', text: 'Generate PDF preview first.' });
-      return;
+    setNotice({ type: '', text: '' });
+
+    let htmlForPrint = pdfPreviewHtml;
+    if (!htmlForPrint) {
+      htmlForPrint = generatePdf({ notify: false });
+      if (!htmlForPrint) {
+        return;
+      }
     }
+
+    setShowPatientDetails(false);
+
     const printWindow = window.open('', '_blank', 'noopener,noreferrer,width=960,height=720');
     if (!printWindow) {
       setNotice({ type: 'error', text: 'Popup blocked. Allow popups to print.' });
       return;
     }
     printWindow.document.open();
-    printWindow.document.write(pdfPreviewHtml);
+    printWindow.document.write(htmlForPrint);
     printWindow.document.close();
     printWindow.onload = () => {
       printWindow.focus();
       printWindow.print();
     };
+
+    setNotice({ type: 'success', text: 'Print preview opened.' });
   };
 
   // ── Chronic condition helpers ──
@@ -581,6 +690,116 @@ function DoctorConsultationsPage() {
     setEditingConditionId(condition.id);
   };
 
+  const refreshActiveMedications = async (patientId) => {
+    const medicationRes = await getPatientSnapshotActiveMedications(patientId);
+    setSnapshot((prev) => ({ ...prev, activeMedications: medicationRes?.data || [] }));
+  };
+
+  const resetMedicationForm = () => {
+    setActiveMedicationForm({ ...INITIAL_ACTIVE_MEDICATION_FORM });
+    setEditingMedicationId('');
+  };
+
+  const startEditMedication = (medication) => {
+    setActiveMedicationForm({
+      name: medication.name || '',
+      dosage: medication.dosage || '',
+      prescibed_for: medication.prescibed_for || '',
+      prescibed_at: toDateInputValue(medication.prescibed_at),
+    });
+    setEditingMedicationId(medication.id);
+  };
+
+  const onMedicationSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!selectedPatient?.id) {
+      setNotice({ type: 'error', text: 'Select a patient before updating active medications.' });
+      return;
+    }
+
+    const payload = {
+      name: activeMedicationForm.name.trim(),
+      dosage: activeMedicationForm.dosage.trim(),
+      prescibed_for: activeMedicationForm.prescibed_for.trim(),
+      prescibed_at: activeMedicationForm.prescibed_at,
+    };
+
+    if (!payload.name || !payload.dosage || !payload.prescibed_for || !payload.prescibed_at) {
+      setNotice({ type: 'error', text: 'Complete all active medication fields before saving.' });
+      return;
+    }
+
+    try {
+      setWorking(true);
+      if (editingMedicationId) {
+        const response = await updatePatientActiveMedication(editingMedicationId, payload);
+        const updated = response?.data;
+        setSnapshot((prev) => ({
+          ...prev,
+          activeMedications: prev.activeMedications.map((medication) =>
+            medication.id === editingMedicationId
+              ? {
+                ...medication,
+                ...payload,
+                ...(updated || {}),
+              }
+              : medication
+          ),
+        }));
+        setNotice({ type: 'success', text: 'Active medication updated.' });
+      } else {
+        const response = await createPatientActiveMedication({ ...payload, patient_id: selectedPatient.id });
+        const created = response?.data;
+        if (created?.id) {
+          setSnapshot((prev) => ({
+            ...prev,
+            activeMedications: [created, ...prev.activeMedications],
+          }));
+        }
+        setNotice({ type: 'success', text: 'Active medication added.' });
+      }
+
+      refreshActiveMedications(selectedPatient.id).catch(() => {
+        // Keep UI responsive even if refresh fails after optimistic sync.
+      });
+      resetMedicationForm();
+    } catch (error) {
+      setNotice({ type: 'error', text: toFriendlyMessage(error, 'Unable to save active medication.') });
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const onMedicationDelete = async (medicationId) => {
+    if (!window.confirm('Delete this active medication?')) return;
+
+    if (!selectedPatient?.id) {
+      setNotice({ type: 'error', text: 'Select a patient before deleting active medications.' });
+      return;
+    }
+
+    try {
+      setWorking(true);
+      await deletePatientActiveMedication(medicationId);
+      setSnapshot((prev) => ({
+        ...prev,
+        activeMedications: prev.activeMedications.filter((medication) => medication.id !== medicationId),
+      }));
+      refreshActiveMedications(selectedPatient.id).catch(() => {
+        // Keep UI responsive even if refresh fails after optimistic sync.
+      });
+      setNotice({ type: 'success', text: 'Active medication deleted.' });
+      if (editingMedicationId === medicationId) {
+        resetMedicationForm();
+      }
+    } catch (error) {
+      setNotice({ type: 'error', text: toFriendlyMessage(error, 'Unable to delete active medication.') });
+    } finally {
+      setWorking(false);
+    }
+  };
+
   // ── Finalize ──
   const handleFinalize = async () => {
     if (!consultationId) {
@@ -602,11 +821,10 @@ function DoctorConsultationsPage() {
       setNotice({ type: 'success', text: 'Consultation finalized successfully.' });
 
       if (selectedPatient) {
-        setResults((prev) =>
-          prev.map((item) =>
-            item.id === selectedPatient.id ? { ...item, active_consultation_id: null } : item,
-          ),
-        );
+        syncPatientInSearchCache(selectedPatient.id, (item) => ({
+          ...item,
+          active_consultation_id: null,
+        }));
       }
 
       closeWorkspace();
@@ -837,6 +1055,16 @@ function DoctorConsultationsPage() {
                   <span className="status-chip muted">No consultation</span>
                 )}
 
+                {canPrescribe ? (
+                  <button
+                    type="button"
+                    className="patient-secondary-btn consult-detail-toggle-btn"
+                    onClick={() => setShowPatientDetails((prev) => !prev)}
+                  >
+                    {showPatientDetails ? 'Hide Patient Details' : 'Show Patient Details'}
+                  </button>
+                ) : null}
+
                 {/* Patient info pills */}
                 {snapshot.profile ? (
                   <>
@@ -866,215 +1094,124 @@ function DoctorConsultationsPage() {
 
             {/* ── 3-section layout ── */}
             {canPrescribe ? (
-              <div className="consult-workspace-body">
-                {/* ── Section 1: Prescription (left full height) ── */}
-                <section className="consult-section-prescription">
-                  <div className="consult-section-head">
-                    <FileText size={16} />
-                    <h4>Prescription</h4>
-                  </div>
-
-                  <div className="consult-context-row">
-                    <p>
-                      <strong>Consultation:</strong> {consultationId.slice(0, 12)}…
-                    </p>
-                    <label>
-                      Clinic
-                      <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
-                        <option value="">Select clinic</option>
-                        {clinics.map((clinic) => (
-                          <option key={clinic.id} value={clinic.id}>
-                            {clinic.clinic_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="prescription-rows-scroll">
-                    {items.map((item, index) => (
-                      <div key={`item-${index}`} className="prescription-row">
-                        <label>
-                          Medicine
-                          <input
-                            value={item.drug_name}
-                            onChange={(e) => updateItem(index, 'drug_name', e.target.value)}
-                            placeholder="e.g. Paracetamol"
-                          />
-                        </label>
-                        <label>
-                          Dosage
-                          <input
-                            value={item.dosage}
-                            onChange={(e) => updateItem(index, 'dosage', e.target.value)}
-                            placeholder="e.g. 500 mg"
-                          />
-                        </label>
-                        <label>
-                          Frequency
-                          <input
-                            value={item.frequency}
-                            onChange={(e) => updateItem(index, 'frequency', e.target.value)}
-                            placeholder="e.g. 1-0-1"
-                          />
-                        </label>
-                        <label>
-                          Duration (days)
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.duration_days}
-                            onChange={(e) => updateItem(index, 'duration_days', e.target.value)}
-                            placeholder="5"
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          className="clinic-action-btn danger"
-                          onClick={() => deleteRow(index)}
-                          aria-label={`Delete row ${index + 1}`}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="consult-rx-actions">
-                    <button type="button" className="patient-secondary-btn" onClick={addRow}>
-                      <Plus size={14} /> Add Medicine
-                    </button>
-                    <button type="button" className="submit-btn slim" onClick={savePrescription} disabled={working}>
-                      Save Prescription
-                    </button>
-                    <button type="button" className="submit-btn slim" onClick={generatePdf} disabled={working}>
-                      <FileText size={14} /> Preview PDF
-                    </button>
-                    <button
-                      type="button"
-                      className="submit-btn slim"
-                      onClick={printPrescription}
-                      disabled={working || !pdfPreviewHtml}
-                    >
-                      <FileText size={14} /> Print PDF
-                    </button>
-                  </div>
-
-                  {/* PDF preview */}
-                  {pdfPreviewHtml ? (
-                    <div className="consult-pdf-preview">
-                      <iframe className="consultation-pdf-frame" title="PDF Preview" srcDoc={pdfPreviewHtml} />
-                    </div>
-                  ) : null}
-                </section>
-
-                {/* ── Right column ── */}
-                <div className="consult-section-right-col">
-                  {/* ── Section 2: Chronic Conditions (right ~50%) ── */}
-                  <section className="consult-section-conditions">
+              <div className={`consult-workspace-body ${showPatientDetails ? 'details-open' : 'details-hidden'}`}>
+                <div className="consult-rx-column">
+                  <section className="consult-section-prescription consult-section-resizable">
                     <div className="consult-section-head">
-                      <ShieldCheck size={16} />
-                      <h4>Chronic Conditions</h4>
+                      <FileText size={16} />
+                      <h4>Prescription Builder</h4>
                     </div>
 
-                    <div className="consult-chip-row">
-                      <span>{activeConditions} Active</span>
-                      <span>{managedConditions} Managed</span>
-                      <span>{resolvedConditions} Resolved</span>
+                    <div className="consult-context-row">
+                      <p>
+                        <strong>Consultation:</strong> {consultationId.slice(0, 12)}…
+                      </p>
+                      <label>
+                        Clinic
+                        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
+                          <option value="">Select clinic</option>
+                          {clinics.map((clinic) => (
+                            <option key={clinic.id} value={clinic.id}>
+                              {clinic.clinic_name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
 
-                    {/* Add / Edit form */}
-                    <form className="consult-condition-form" onSubmit={onConditionSubmit}>
-                      <input
-                        placeholder="Condition Name"
-                        value={conditionForm.condition_name}
-                        onChange={(e) => setConditionForm((prev) => ({ ...prev, condition_name: e.target.value }))}
-                        required
-                      />
-                      <select
-                        value={conditionForm.status}
-                        onChange={(e) => setConditionForm((prev) => ({ ...prev, status: e.target.value }))}
-                      >
-                        <option value="active">Active</option>
-                        <option value="managed">Managed</option>
-                        <option value="resolved">Resolved</option>
-                      </select>
-                      <input
-                        type="date"
-                        value={conditionForm.diagnosed_date}
-                        onChange={(e) => setConditionForm((prev) => ({ ...prev, diagnosed_date: e.target.value }))}
-                        placeholder="Diagnosed date"
-                      />
-                      <button className="submit-btn slim" type="submit" disabled={working}>
-                        {editingConditionId ? 'Update' : 'Add'}
-                      </button>
-                      {editingConditionId ? (
-                        <button type="button" className="text-btn" onClick={resetConditionForm}>
-                          Cancel
-                        </button>
-                      ) : null}
-                    </form>
-
-                    {/* Condition list */}
-                    <div className="consult-conditions-list">
-                      {snapshot.conditions.length === 0 ? (
-                        <div className="luxe-empty-mini">
-                          <ClipboardList size={16} />
-                          <p>No chronic conditions recorded.</p>
-                        </div>
-                      ) : null}
-                      {snapshot.conditions.map((condition) => (
-                        <div key={condition.id} className="consult-condition-card">
-                          <div className="consult-condition-info">
-                            <strong>{condition.condition_name}</strong>
-                            <span
-                              className={`status-pill ${
-                                condition.status === 'active'
-                                  ? 'success'
-                                  : condition.status === 'managed'
-                                    ? 'warn'
-                                    : 'neutral'
-                              }`}
-                            >
-                              {titleCase(condition.status)}
-                            </span>
-                            {condition.diagnosed_date ? (
-                              <small>
-                                <CalendarDays size={11} /> {formatDate(condition.diagnosed_date)}
-                              </small>
-                            ) : null}
-                          </div>
-                          <div className="consult-condition-actions">
-                            <button
-                              type="button"
-                              className="icon-button"
-                              onClick={() => startEditCondition(condition)}
-                              aria-label="Edit condition"
-                            >
-                              <Edit3 size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-button danger"
-                              onClick={() => onConditionDelete(condition.id)}
-                              aria-label="Delete condition"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
+                    <div className="prescription-rows-scroll">
+                      {items.map((item, index) => (
+                        <div key={`item-${index}`} className="prescription-row">
+                          <label>
+                            Medicine
+                            <input
+                              value={item.drug_name}
+                              onChange={(e) => updateItem(index, 'drug_name', e.target.value)}
+                              placeholder="e.g. Paracetamol"
+                            />
+                          </label>
+                          <label>
+                            Dosage
+                            <input
+                              value={item.dosage}
+                              onChange={(e) => updateItem(index, 'dosage', e.target.value)}
+                              placeholder="e.g. 500 mg"
+                            />
+                          </label>
+                          <label>
+                            Frequency
+                            <input
+                              value={item.frequency}
+                              onChange={(e) => updateItem(index, 'frequency', e.target.value)}
+                              placeholder="e.g. 1-0-1"
+                            />
+                          </label>
+                          <label>
+                            Prescribed For
+                            <input
+                              value={item.prescribed_for}
+                              onChange={(e) => updateItem(index, 'prescribed_for', e.target.value)}
+                              placeholder="e.g. Hypertension"
+                            />
+                          </label>
+                          <label>
+                            Duration (days)
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.duration_days}
+                              onChange={(e) => updateItem(index, 'duration_days', e.target.value)}
+                              placeholder="5"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            className="clinic-action-btn danger"
+                            onClick={() => deleteRow(index)}
+                            aria-label={`Delete row ${index + 1}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       ))}
                     </div>
+
+                    <div className="consult-rx-actions">
+                      <button type="button" className="patient-secondary-btn" onClick={addRow}>
+                        <Plus size={14} /> Add Medicine
+                      </button>
+                      <button type="button" className="submit-btn slim" onClick={savePrescription} disabled={working}>
+                        Save Prescription
+                      </button>
+                      <button type="button" className="submit-btn slim" onClick={generatePdf} disabled={working}>
+                        <FileText size={14} /> Preview PDF
+                      </button>
+                      <button
+                        type="button"
+                        className="submit-btn slim"
+                        onClick={printPrescription}
+                        disabled={working}
+                      >
+                        <FileText size={14} /> Print PDF
+                      </button>
+                    </div>
+
+                    {notice.text ? (
+                      <p className={notice.type === 'error' ? 'consult-action-feedback error' : 'consult-action-feedback success'}>
+                        {notice.type === 'error' ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+                        {notice.text}
+                      </p>
+                    ) : null}
+
                   </section>
 
-                  {/* ── Section 3: Doctor Notes (right ~50%) ── */}
-                  <section className="consult-section-notes">
+                  <section className="consult-section-notes consult-section-resizable">
                     <div className="consult-section-head">
                       <Notebook size={16} />
                       <h4>Doctor Notes</h4>
                     </div>
                     <p className="muted" style={{ fontSize: '12px', margin: '0 0 8px' }}>
-                      Notes will be included in the prescription document.
+                      Notes are included in the printable prescription.
                     </p>
                     <textarea
                       className="consult-notes-textarea"
@@ -1085,6 +1222,260 @@ function DoctorConsultationsPage() {
                     />
                   </section>
                 </div>
+
+                {showPatientDetails ? (
+                  <div className="consult-section-right-col consult-patient-details-column">
+                    <section className="consult-section-medications">
+                      <div className="consult-section-head">
+                        <Pill size={16} />
+                        <h4>Active Medications</h4>
+                      </div>
+
+                      <form className="consult-medication-form" onSubmit={onMedicationSubmit} noValidate>
+                        <input
+                          placeholder="Medicine name"
+                          value={activeMedicationForm.name}
+                          onChange={(e) => setActiveMedicationForm((prev) => ({ ...prev, name: e.target.value }))}
+                        />
+                        <input
+                          placeholder="Dosage"
+                          value={activeMedicationForm.dosage}
+                          onChange={(e) => setActiveMedicationForm((prev) => ({ ...prev, dosage: e.target.value }))}
+                        />
+                        <input
+                          placeholder="Prescribed for"
+                          value={activeMedicationForm.prescibed_for}
+                          onChange={(e) => setActiveMedicationForm((prev) => ({ ...prev, prescibed_for: e.target.value }))}
+                        />
+                        <input
+                          type="date"
+                          value={activeMedicationForm.prescibed_at}
+                          onChange={(e) => setActiveMedicationForm((prev) => ({ ...prev, prescibed_at: e.target.value }))}
+                        />
+                        <button className="submit-btn slim" type="submit" disabled={working}>
+                          {editingMedicationId ? 'Update' : 'Add'}
+                        </button>
+                        {editingMedicationId ? (
+                          <button type="button" className="text-btn" onClick={resetMedicationForm}>
+                            Cancel
+                          </button>
+                        ) : null}
+                      </form>
+
+                      {snapshot.activeMedications.length === 0 ? (
+                        <div className="luxe-empty-mini">
+                          <Pill size={16} />
+                          <p>No active medication records found.</p>
+                        </div>
+                      ) : (
+                        <div className="active-medications-table-wrap">
+                          <table className="table active-medications-table">
+                            <thead>
+                              <tr>
+                                <th>S/N</th>
+                                <th>Name</th>
+                                <th>Dosage</th>
+                                <th>Prescribed By</th>
+                                <th>Prescribed For</th>
+                                <th>Prescribed At</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {snapshot.activeMedications.map((medication, index) => (
+                                <tr key={medication.id}>
+                                  <td>
+                                    <span className="active-medications-sn">
+                                      <Pill size={13} /> {index + 1}
+                                    </span>
+                                  </td>
+                                  <td>{medication.name}</td>
+                                  <td>{medication.dosage}</td>
+                                  <td>
+                                    <span className="active-medications-doctor">
+                                      <UserRound size={13} /> {medication.doctor_name || 'Doctor'}
+                                    </span>
+                                  </td>
+                                  <td>{medication.prescibed_for || '-'}</td>
+                                  <td>
+                                    <span className="active-medications-date">
+                                      <CalendarDays size={13} /> {formatDate(medication.prescibed_at)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <div className="consult-medication-actions">
+                                      <button
+                                        type="button"
+                                        className="consult-medication-action-btn"
+                                        onClick={() => startEditMedication(medication)}
+                                      >
+                                        Edit
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="consult-medication-action-btn danger"
+                                        onClick={() => onMedicationDelete(medication.id)}
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="consult-section-conditions">
+                      <div className="consult-section-head">
+                        <ShieldCheck size={16} />
+                        <h4>Chronic Conditions</h4>
+                      </div>
+
+                      <div className="consult-chip-row">
+                        <span>{activeConditions} Active</span>
+                        <span>{managedConditions} Managed</span>
+                        <span>{resolvedConditions} Resolved</span>
+                      </div>
+
+                      <form className="consult-condition-form" onSubmit={onConditionSubmit}>
+                        <input
+                          placeholder="Condition Name"
+                          value={conditionForm.condition_name}
+                          onChange={(e) => setConditionForm((prev) => ({ ...prev, condition_name: e.target.value }))}
+                          required
+                        />
+                        <select
+                          value={conditionForm.status}
+                          onChange={(e) => setConditionForm((prev) => ({ ...prev, status: e.target.value }))}
+                        >
+                          <option value="active">Active</option>
+                          <option value="managed">Managed</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                        <input
+                          type="date"
+                          value={conditionForm.diagnosed_date}
+                          onChange={(e) => setConditionForm((prev) => ({ ...prev, diagnosed_date: e.target.value }))}
+                          placeholder="Diagnosed date"
+                        />
+                        <button className="submit-btn slim" type="submit" disabled={working}>
+                          {editingConditionId ? 'Update' : 'Add'}
+                        </button>
+                        {editingConditionId ? (
+                          <button type="button" className="text-btn" onClick={resetConditionForm}>
+                            Cancel
+                          </button>
+                        ) : null}
+                      </form>
+
+                      <div className="consult-conditions-list">
+                        {snapshot.conditions.length === 0 ? (
+                          <div className="luxe-empty-mini">
+                            <ClipboardList size={16} />
+                            <p>No chronic conditions recorded.</p>
+                          </div>
+                        ) : null}
+                        {snapshot.conditions.map((condition) => (
+                          <div key={condition.id} className="consult-condition-card">
+                            <div className="consult-condition-info">
+                              <strong>{condition.condition_name}</strong>
+                              <span
+                                className={`status-pill ${
+                                  condition.status === 'active'
+                                    ? 'success'
+                                    : condition.status === 'managed'
+                                      ? 'warn'
+                                      : 'neutral'
+                                }`}
+                              >
+                                {titleCase(condition.status)}
+                              </span>
+                              {condition.diagnosed_date ? (
+                                <small>
+                                  <CalendarDays size={11} /> {formatDate(condition.diagnosed_date)}
+                                </small>
+                              ) : null}
+                            </div>
+                            <div className="consult-condition-actions">
+                              <button
+                                type="button"
+                                className="icon-button"
+                                onClick={() => startEditCondition(condition)}
+                                aria-label="Edit condition"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="icon-button danger"
+                                onClick={() => onConditionDelete(condition.id)}
+                                aria-label="Delete condition"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="consult-section-allergies">
+                      <div className="consult-section-head">
+                        <ShieldAlert size={16} />
+                        <h4>Allergies</h4>
+                      </div>
+
+                      {snapshot.allergies.length === 0 ? (
+                        <div className="luxe-empty-mini">
+                          <ShieldAlert size={16} />
+                          <p>No allergies recorded.</p>
+                        </div>
+                      ) : (
+                        <div className="consult-allergy-list">
+                          {snapshot.allergies.map((allergy) => (
+                            <article key={allergy.id} className="consult-allergy-card">
+                              <strong>{allergy.allergen}</strong>
+                              <span
+                                className={`status-pill ${
+                                  allergy.severity === 'severe'
+                                    ? 'danger'
+                                    : allergy.severity === 'moderate'
+                                      ? 'warn'
+                                      : 'neutral'
+                                }`}
+                              >
+                                {titleCase(allergy.severity)}
+                              </span>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                ) : (
+                  <div className="consult-section-right-col consult-preview-column">
+                    <section className="consult-section-preview">
+                      <div className="consult-section-head">
+                        <FileText size={16} />
+                        <h4>Prescription Preview</h4>
+                      </div>
+
+                      {pdfPreviewHtml ? (
+                        <div className="consult-pdf-preview">
+                          <iframe className="consultation-pdf-frame" title="PDF Preview" srcDoc={pdfPreviewHtml} />
+                        </div>
+                      ) : (
+                        <div className="luxe-empty-mini">
+                          <FileText size={16} />
+                          <p>Generate PDF preview to view final print layout.</p>
+                        </div>
+                      )}
+                    </section>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="consult-workspace-no-rx">

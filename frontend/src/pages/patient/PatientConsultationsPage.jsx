@@ -1,42 +1,41 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getPrescriptionByConsultationId } from '../../api/consultations';
-import { getPatientConsultations } from '../../api/patients';
+import { getPatientPrescriptionById, getPatientPrescriptions } from '../../api/patients';
 import { formatDate, titleCase } from '../../utils/formatters';
 
 function PatientConsultationsPage() {
   const [modalOpen, setModalOpen] = useState(false);
-  const [selectedConsultation, setSelectedConsultation] = useState(null);
+  const [selectedPrescription, setSelectedPrescription] = useState(null);
 
-  const { data: consultationsRes, isLoading: loading, error: fetchError } = useQuery({
-    queryKey: ['patient-consultations'],
-    queryFn: getPatientConsultations,
+  const { data: prescriptionsRes, isLoading: loading, error: fetchError } = useQuery({
+    queryKey: ['patient-prescriptions'],
+    queryFn: getPatientPrescriptions,
   });
-  const consultations = consultationsRes?.data || [];
-  const error = fetchError ? fetchError?.response?.data?.error?.message || 'Failed to load consultations.' : '';
+  const prescriptions = prescriptionsRes?.data || [];
+  const error = fetchError ? fetchError?.response?.data?.error?.message || 'Failed to load past prescriptions.' : '';
 
   const { data: prescriptionRes, isLoading: prescriptionLoading, error: presError } = useQuery({
-    queryKey: ['prescription', selectedConsultation?.id],
-    queryFn: () => getPrescriptionByConsultationId(selectedConsultation.id),
-    enabled: !!selectedConsultation?.id,
-    retry: false
+    queryKey: ['patient-prescription', selectedPrescription?.prescription_id],
+    queryFn: () => getPatientPrescriptionById(selectedPrescription.prescription_id),
+    enabled: !!selectedPrescription?.prescription_id,
+    retry: false,
   });
   const prescription = prescriptionRes?.data || null;
   const prescriptionError = presError ? presError?.response?.data?.error?.message || 'Prescription could not be loaded.' : '';
 
-  const openPrescription = (row) => {
-    setSelectedConsultation(row);
+  const openPrescription = (record) => {
+    setSelectedPrescription(record);
     setModalOpen(true);
   };
 
   return (
     <section className="panel luxe-section-card patient-page-luxe">
       <div className="panel-head">
-        <h3>Consultations</h3>
-        <span className="luxe-subtle-count">{consultations.length} entries</span>
+        <h3>Past Prescriptions</h3>
+        <span className="luxe-subtle-count">{prescriptions.length} entries</span>
       </div>
 
-      {loading ? <p className="muted">Loading consultations...</p> : null}
+      {loading ? <p className="muted">Loading past prescriptions...</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
 
       <table className="table">
@@ -44,20 +43,22 @@ function PatientConsultationsPage() {
           <tr>
             <th>Doctor</th>
             <th>Date</th>
-            <th>Status</th>
-            <th>Prescription</th>
+            <th>Source</th>
+            <th>Items</th>
+            <th>Details</th>
           </tr>
         </thead>
         <tbody>
-          {consultations.map((row) => (
-            <tr key={row.id}>
+          {prescriptions.map((row) => (
+            <tr key={row.prescription_id}>
               <td>{row.doctor_name || '-'}</td>
-              <td>{formatDate(row.consultation_date)}</td>
+              <td>{formatDate(row.reference_date || row.issued_at)}</td>
               <td>
-                <span className={`status-pill ${row.status === 'completed' ? 'success' : 'warn'}`}>
-                  {titleCase(row.status)}
+                <span className={`status-pill ${row.is_legacy_import ? 'warn' : 'success'}`}>
+                  {row.is_legacy_import ? 'Legacy Import' : titleCase(row.status || 'completed')}
                 </span>
               </td>
+              <td>{row.items_count || 0}</td>
               <td>
                 <button type="button" className="text-btn" onClick={() => openPrescription(row)}>
                   View Details
@@ -65,10 +66,10 @@ function PatientConsultationsPage() {
               </td>
             </tr>
           ))}
-          {!loading && consultations.length === 0 ? (
+          {!loading && prescriptions.length === 0 ? (
             <tr>
-              <td className="patient-empty" colSpan={4}>
-                No consultations found.
+              <td className="patient-empty" colSpan={5}>
+                No past prescriptions found.
               </td>
             </tr>
           ) : null}
@@ -79,22 +80,22 @@ function PatientConsultationsPage() {
         <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
             <div className="panel-head split">
-              <h3>Consultation Details</h3>
+              <h3>Prescription Details</h3>
               <button className="text-btn" type="button" onClick={() => setModalOpen(false)}>
                 Close
               </button>
             </div>
 
-            {selectedConsultation ? (
+            {selectedPrescription ? (
               <div style={{ marginBottom: '20px', padding: '12px', background: '#f9f9f6', borderRadius: '8px', border: '1px solid #eeedea', fontSize: '13px' }}>
-                <p style={{ margin: '0 0 6px 0' }}><strong>Started:</strong> {new Date(selectedConsultation.consultation_date).toLocaleString()}</p>
-                {selectedConsultation.updated_at && String(selectedConsultation.status).toLowerCase() === 'completed' ? (
-                  <p style={{ margin: 0 }}><strong>Ended:</strong> {new Date(selectedConsultation.updated_at).toLocaleString()}</p>
-                ) : null}
+                <p style={{ margin: '0 0 6px 0' }}><strong>Recorded:</strong> {new Date(selectedPrescription.reference_date || selectedPrescription.issued_at).toLocaleString()}</p>
+                <p style={{ margin: '0 0 6px 0' }}><strong>Source:</strong> {selectedPrescription.is_legacy_import ? 'Legacy upload' : 'Consultation'}</p>
+                <p style={{ margin: 0 }}><strong>Consultation ID:</strong> {selectedPrescription.consultation_id || '-'}</p>
               </div>
             ) : null}
 
-            {!prescription && !prescriptionError ? <p className="muted">Loading details...</p> : null}
+            {prescriptionLoading ? <p className="muted">Loading details...</p> : null}
+            {!prescriptionLoading && !prescription && !prescriptionError ? <p className="muted">No prescription details available.</p> : null}
             {prescriptionError ? <p className="error-text">{prescriptionError}</p> : null}
 
             {prescription?.items?.length ? (

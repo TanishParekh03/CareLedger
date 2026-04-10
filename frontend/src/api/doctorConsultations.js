@@ -33,6 +33,26 @@ export async function getPatientSnapshotEmergency(patientId) {
   return response.data;
 }
 
+export async function getPatientSnapshotActiveMedications(patientId) {
+  const response = await client.get(`/medications/patient/${patientId}`);
+  return response.data;
+}
+
+export async function createPatientActiveMedication(payload) {
+  const response = await client.post('/medications', payload);
+  return response.data;
+}
+
+export async function updatePatientActiveMedication(id, payload) {
+  const response = await client.put(`/medications/${id}`, payload);
+  return response.data;
+}
+
+export async function deletePatientActiveMedication(id) {
+  const response = await client.delete(`/medications/${id}`);
+  return response.data;
+}
+
 export async function startConsultation(patientId) {
   const response = await client.post('/consultations', { patient_id: patientId });
   return response.data;
