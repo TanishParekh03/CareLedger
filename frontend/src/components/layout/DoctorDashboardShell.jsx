@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import {
   Bell,
   Building2,
@@ -13,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 const NAV_ITEMS = [
@@ -25,11 +28,37 @@ const NAV_ITEMS = [
 
 function DoctorDashboardShell() {
   const { auth, logout } = useAuth();
+  const location = useLocation();
+  const shellRef = useRef(null);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  useGSAP(
+    () => {
+      const timeline = gsap.timeline();
+      timeline
+        .from('.doctor-topbar', {
+          opacity: 0,
+          y: 22,
+          duration: 0.55,
+          ease: 'power3.out',
+        })
+        .from(
+          '.doctor-content-wrap',
+          {
+            opacity: 0,
+            y: 28,
+            duration: 0.68,
+            ease: 'power4.out',
+          },
+          '-=0.28'
+        );
+    },
+    { scope: shellRef, dependencies: [location.pathname], revertOnUpdate: true }
+  );
+
   return (
-    <div className={`doctor-dashboard-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
+    <div ref={shellRef} className={`doctor-dashboard-layout ${collapsed ? 'sidebar-collapsed' : ''}`}>
       {/* ── Mobile top bar ──────────────────────────────────────────────────── */}
       <header className="mobile-topbar">
         <div className="mobile-topbar-left">

@@ -19,11 +19,12 @@ import PatientEmergencyPage from './pages/patient/PatientEmergencyPage';
 import PatientLegacyDocumentsPage from './pages/patient/PatientLegacyDocumentsPage';
 import PatientOverviewPage from './pages/patient/PatientOverviewPage';
 import PatientProfilePage from './pages/patient/PatientProfilePage';
+import CareLedgerMarketingPage from './pages/marketing/CareLedgerMarketingPage';
 
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/signup" replace />} />
+      <Route path="/" element={<CareLedgerMarketingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route

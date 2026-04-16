@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Activity, Eye, EyeOff, KeyRound, Mail, Phone } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useGSAP } from '@gsap/react';
+import gsap from 'gsap';
 import { loginUser } from '../../api/auth';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -30,6 +32,7 @@ const ROLE_COPY = {
 function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const pageRef = useRef(null);
 
   const [activeRole, setActiveRole] = useState('patient');
   const [identifierType, setIdentifierType] = useState('email');
@@ -41,6 +44,30 @@ function LoginPage() {
   const [errors, setErrors] = useState({});
 
   const heroCopy = useMemo(() => ROLE_COPY[activeRole], [activeRole]);
+
+  useGSAP(
+    () => {
+      gsap
+        .timeline()
+        .from('.login-hero', {
+          opacity: 0,
+          y: 30,
+          duration: 0.75,
+          ease: 'power4.out',
+        })
+        .from(
+          '.login-card',
+          {
+            opacity: 0,
+            y: 40,
+            duration: 0.75,
+            ease: 'power4.out',
+          },
+          '-=0.45'
+        );
+    },
+    { scope: pageRef }
+  );
 
   const validate = () => {
     const nextErrors = {};
@@ -99,7 +126,7 @@ function LoginPage() {
   };
 
   return (
-    <main className="login-page">
+    <main className="login-page" ref={pageRef}>
       <section className="login-surface">
         <aside className="login-hero">
           <div className="hero-badge">
