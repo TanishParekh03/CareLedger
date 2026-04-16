@@ -1,0 +1,638 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-mono);font-size:13px}
+.root{padding:1rem 0}
+.header{padding:0 0 1.5rem}
+.header h1{font-size:22px;font-weight:500;color:var(--color-text-primary);font-family:var(--font-sans);letter-spacing:-0.5px}
+.header p{font-size:13px;color:var(--color-text-secondary);margin-top:4px;font-family:var(--font-sans)}
+.badges{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.badge{font-size:11px;padding:3px 8px;border-radius:var(--border-radius-md);font-family:var(--font-sans)}
+.b-green{background:#EAF3DE;color:#3B6D11}.b-blue{background:#E6F1FB;color:#185FA5}.b-amber{background:#FAEEDA;color:#854F0B}
+.tag-section{margin-bottom:1.5rem}
+.tag-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);cursor:pointer;user-select:none}
+.tag-header:hover{background:var(--color-background-tertiary)}
+.tag-name{font-size:14px;font-weight:500;color:var(--color-text-primary);font-family:var(--font-sans);flex:1}
+.tag-count{font-size:11px;color:var(--color-text-secondary);font-family:var(--font-sans)}
+.tag-arrow{font-size:10px;color:var(--color-text-tertiary);transition:transform 0.2s}
+.tag-arrow.open{transform:rotate(90deg)}
+.endpoint-list{border:0.5px solid var(--color-border-tertiary);border-top:none;border-radius:0 0 var(--border-radius-md) var(--border-radius-md);overflow:hidden}
+.endpoint-row{border-bottom:0.5px solid var(--color-border-tertiary);cursor:pointer}
+.endpoint-row:last-child{border-bottom:none}
+.endpoint-header{display:flex;align-items:center;gap:10px;padding:10px 14px}
+.endpoint-header:hover{background:var(--color-background-secondary)}
+.method{font-size:11px;font-weight:500;padding:2px 7px;border-radius:4px;min-width:48px;text-align:center;font-family:var(--font-sans)}
+.m-get{background:#EAF3DE;color:#3B6D11}
+.m-post{background:#E6F1FB;color:#185FA5}
+.m-put{background:#FAEEDA;color:#854F0B}
+.m-delete{background:#FCEBEB;color:#A32D2D}
+.ep-path{color:var(--color-text-primary);font-size:12px;flex:1}
+.auth-icon{font-size:11px;color:var(--color-text-tertiary)}
+.ep-desc{font-size:12px;color:var(--color-text-secondary);font-family:var(--font-sans)}
+.endpoint-detail{background:var(--color-background-primary);border-top:0.5px solid var(--color-border-tertiary);padding:16px}
+.detail-section{margin-bottom:14px}
+.detail-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);font-family:var(--font-sans);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
+.param-table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--font-sans)}
+.param-table th{font-size:11px;color:var(--color-text-secondary);font-weight:500;text-align:left;padding:4px 8px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.param-table td{padding:5px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);vertical-align:top}
+.param-table tr:last-child td{border-bottom:none}
+.req-pill{font-size:10px;padding:1px 5px;border-radius:3px;background:#FCEBEB;color:#A32D2D}
+.opt-pill{font-size:10px;padding:1px 5px;border-radius:3px;background:#F1EFE8;color:#5F5E5A}
+.type-text{color:var(--color-text-secondary);font-size:11px}
+.code-block{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px;font-size:11px;white-space:pre-wrap;word-break:break-all;line-height:1.6;color:var(--color-text-primary);font-family:var(--font-mono)}
+.try-btn{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:6px 14px;font-size:12px;color:var(--color-text-primary);cursor:pointer;font-family:var(--font-sans)}
+.try-btn:hover{background:var(--color-background-secondary)}
+.try-panel{margin-top:12px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden}
+.try-panel-header{padding:8px 12px;background:var(--color-background-secondary);border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;color:var(--color-text-secondary);font-family:var(--font-sans)}
+.try-panel-body{padding:12px}
+.try-field{margin-bottom:10px}
+.try-field label{display:block;font-size:11px;color:var(--color-text-secondary);margin-bottom:4px;font-family:var(--font-sans)}
+.try-field input,.try-field textarea,.try-field select{width:100%;padding:6px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-size:12px;font-family:var(--font-mono)}
+.try-field textarea{height:80px;resize:vertical}
+.exec-btn{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:7px 18px;font-size:12px;color:var(--color-text-primary);cursor:pointer;font-family:var(--font-sans)}
+.exec-btn:hover{background:var(--color-background-secondary)}
+.response-box{margin-top:10px;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);overflow:hidden}
+.resp-header{padding:6px 10px;font-size:11px;font-family:var(--font-sans);display:flex;align-items:center;gap:8px}
+.resp-200{background:#EAF3DE;color:#3B6D11}
+.resp-4xx{background:#FAEEDA;color:#854F0B}
+.resp-5xx{background:#FCEBEB;color:#A32D2D}
+.resp-body{padding:10px 12px;background:var(--color-background-secondary);font-size:11px;white-space:pre-wrap;word-break:break-all;font-family:var(--font-mono);color:var(--color-text-primary);line-height:1.6}
+.err-table{width:100%;border-collapse:collapse;font-size:12px;font-family:var(--font-sans)}
+.err-table td{padding:4px 8px;border-bottom:0.5px solid var(--color-border-tertiary);vertical-align:top}
+.err-table tr:last-child td{border-bottom:none}
+.hidden{display:none}
+.search-bar{display:flex;gap:8px;margin-bottom:1.5rem;align-items:center}
+.search-bar input{flex:1;padding:8px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;font-family:var(--font-sans)}
+.filter-btns{display:flex;gap:6px}
+.filter-btn{padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);font-size:11px;cursor:pointer;font-family:var(--font-sans)}
+.filter-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+</style>
+
+<div class="root">
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">CareLedger API Explorer — interactive documentation for all endpoints</h2>
+
+<div class="header">
+  <h1>CareLedger API</h1>
+  <p>Base URL: <code>http://localhost:3000/api</code> &nbsp;·&nbsp; All responses use the standard JSON envelope</p>
+  <div class="badges">
+    <span class="badge b-green">v1.0</span>
+    <span class="badge b-blue">JWT Auth</span>
+    <span class="badge b-amber">April 2026</span>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="Search endpoints..." oninput="filterEndpoints()">
+  <div class="filter-btns">
+    <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('GET',this)">GET</button>
+    <button class="filter-btn" onclick="setFilter('POST',this)">POST</button>
+    <button class="filter-btn" onclick="setFilter('PUT',this)">PUT</button>
+    <button class="filter-btn" onclick="setFilter('DELETE',this)">DELETE</button>
+  </div>
+</div>
+
+<div id="apiDocs"></div>
+</div>
+
+<script>
+const API = [
+  {tag:"Authentication & Users",desc:"User registration, login, and account management",endpoints:[
+    {method:"POST",path:"/api/users/signup",auth:"public",summary:"Register a new user account",params:[
+      {name:"email",type:"string",req:true,desc:"User's email address"},
+      {name:"phone",type:"string",req:true,desc:"User's phone number"},
+      {name:"plain_password",type:"string",req:true,desc:"Plain-text password"},
+      {name:"role",type:"string",req:true,desc:'"patient" or "doctor"'}
+    ],response:`{
+  "success": true,
+  "data": {
+    "email": "john@example.com",
+    "phone": "9876543210",
+    "role": "patient"
+  },
+  "message": "User created successfully"
+}`,errors:[{status:"400",code:"BAD_REQUEST",when:"Missing fields or invalid role"},{status:"409",code:"CONFLICT",when:"User already exists"}]},
+    {method:"POST",path:"/api/users/login",auth:"public",summary:"Authenticate and receive a JWT token",params:[
+      {name:"role",type:"string",req:true,desc:'"patient", "doctor", or "admin"'},
+      {name:"plain_password",type:"string",req:true,desc:"User's password"},
+      {name:"email",type:"string",req:false,desc:"Required if phone not provided"},
+      {name:"phone",type:"string",req:false,desc:"Required if email not provided"}
+    ],response:`{
+  "success": true,
+  "data": { "token": "eyJhbGciOiJIUzI1NiIs..." },
+  "message": "Login successful"
+}`,errors:[{status:"401",code:"UNAUTHORIZED",when:"Wrong password"},{status:"404",code:"NOT_FOUND",when:"User not found"}]},
+    {method:"GET",path:"/api/users/:id",auth:"public",summary:"Get a user by ID",urlParams:[{name:"id",type:"UUID",desc:"User ID"}],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "email": "john@example.com",
+    "phone": "9876543210",
+    "role": "patient",
+    "created_at": "2026-01-01T00:00:00.000Z"
+  },
+  "message": "User retrieved successfully"
+}`,errors:[]},
+    {method:"GET",path:"/api/users/",auth:"admin",summary:"Get all users (admin). Supports ?role= filter",response:`{
+  "success": true,
+  "data": [ /* array of user objects */ ],
+  "message": "Operation successful."
+}`,errors:[]},
+    {method:"PUT",path:"/api/users/:id",auth:"bearer",summary:"Update a user's account info",urlParams:[{name:"id",type:"UUID",desc:"User ID"}],params:[
+      {name:"email",type:"string",req:false,desc:"New email"},
+      {name:"phone",type:"string",req:false,desc:"New phone number"},
+      {name:"plain_password",type:"string",req:false,desc:"New password"}
+    ],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "email": "new@example.com",
+    "updated_at": "2026-01-02T00:00:00.000Z"
+  },
+  "message": "User updated successfully"
+}`,errors:[]},
+    {method:"DELETE",path:"/api/users/:id",auth:"admin",summary:"Delete a user by ID",urlParams:[{name:"id",type:"UUID",desc:"User ID"}],response:`{
+  "success": true,
+  "data": { "id": "uuid" },
+  "message": "User deleted successfully"
+}`,errors:[]}
+  ]},
+  {tag:"Patients",desc:"Patient profile, access control, consultations",endpoints:[
+    {method:"POST",path:"/api/patients/",auth:"patient",summary:"Create the authenticated patient's profile",params:[
+      {name:"full_name",type:"string",req:true,desc:"Patient's full name"},
+      {name:"health_id",type:"string",req:true,desc:"Unique health identifier"},
+      {name:"date_of_birth",type:"string",req:false,desc:'e.g. "2000-01-15"'},
+      {name:"gender",type:"string",req:false,desc:'"male", "female", or "other"'},
+      {name:"blood_group",type:"string",req:false,desc:'e.g. "O+", "AB-"'}
+    ],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid", "user_id": "uuid",
+    "full_name": "John Doe",
+    "health_id": "HLTH-12345",
+    "blood_group": "O+"
+  },
+  "message": "Patient profile created successfully."
+}`,errors:[{status:"409",code:"CONFLICT",when:"Profile already exists"}]},
+    {method:"GET",path:"/api/patients/",auth:"patient",summary:"Get the authenticated patient's own profile",response:`{
+  "success": true,
+  "data": {
+    "id": "uuid", "full_name": "John Doe",
+    "health_id": "HLTH-12345",
+    "email": "john@example.com"
+  },
+  "message": "Operation successful."
+}`,errors:[]},
+    {method:"PUT",path:"/api/patients/",auth:"patient",summary:"Update the authenticated patient's profile",params:[
+      {name:"full_name",type:"string",req:false,desc:"Updated name"},
+      {name:"date_of_birth",type:"string",req:false,desc:"Updated DOB"},
+      {name:"gender",type:"string",req:false,desc:'"male", "female", or "other"'},
+      {name:"blood_group",type:"string",req:false,desc:"Updated blood group"}
+    ],response:`{ "success": true, "data": { /* updated patient */ }, "message": "Operation successful." }`,errors:[]},
+    {method:"GET",path:"/api/patients/consultations",auth:"patient",summary:"Get all consultations for the authenticated patient",response:`{
+  "success": true,
+  "data": [{
+    "id": "uuid", "doctor_name": "Dr. Smith",
+    "specialization": "Cardiology",
+    "status": "completed"
+  }],
+  "message": "Operation successful."
+}`,errors:[]},
+    {method:"GET",path:"/api/patients/:id",auth:"bearer",summary:"Get a patient profile by patient ID (patients: own only; doctors: with permission)",urlParams:[{name:"id",type:"UUID",desc:"Patient ID"}],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid", "full_name": "John Doe",
+    "health_id": "HLTH-12345", "blood_group": "O+"
+  },
+  "message": "Operation successful."
+}`,errors:[{status:"403",code:"FORBIDDEN",when:"Doctor has no active access permission"}]},
+    {method:"POST",path:"/api/patients/grant-access",auth:"patient",summary:"Grant a verified doctor access to patient records",params:[
+      {name:"doctor_id",type:"UUID",req:true,desc:"Doctor profile ID to grant access"},
+      {name:"expires_at",type:"string",req:false,desc:"ISO timestamp (null = permanent)"}
+    ],response:`{
+  "success": true,
+  "data": { "status": "ACTIVE", "expires_at": null },
+  "message": "Access granted successfully."
+}`,errors:[{status:"409",code:"CONFLICT",when:"Active permission already exists"}]},
+    {method:"DELETE",path:"/api/patients/revoke-access/:doctorId",auth:"patient",summary:"Revoke a doctor's access to patient records",urlParams:[{name:"doctorId",type:"UUID",desc:"Doctor profile ID"}],response:`{
+  "success": true,
+  "data": { "status": "REVOKED" },
+  "message": "Access revoked successfully."
+}`,errors:[]},
+    {method:"GET",path:"/api/patients/access-list",auth:"patient",summary:"Get all access permissions the patient has granted",response:`{
+  "success": true,
+  "data": [{ "doctor_name": "Dr. Smith", "status": "ACTIVE" }],
+  "message": "Operation successful."
+}`,errors:[]}
+  ]},
+  {tag:"Patient Health Data",desc:"Allergies, chronic conditions, emergency contacts",endpoints:[
+    {method:"POST",path:"/api/patients/allergies",auth:"patient",summary:"Add a new allergy",params:[
+      {name:"allergen",type:"string",req:true,desc:"Name of the allergen"},
+      {name:"severity",type:"string",req:true,desc:'"mild", "moderate", or "severe"'}
+    ],response:`{
+  "success": true,
+  "data": { "allergen": "Peanuts", "severity": "severe" },
+  "message": "Allergy added successfully."
+}`,errors:[]},
+    {method:"GET",path:"/api/patients/allergies",auth:"patient",summary:"Get the authenticated patient's allergies (A-Z)",response:`{ "success": true, "data": [ /* allergy objects */ ] }`,errors:[]},
+    {method:"PUT",path:"/api/patients/allergies/:id",auth:"patient",summary:"Update an allergy by ID",urlParams:[{name:"id",type:"UUID",desc:"Allergy ID"}],params:[
+      {name:"allergen",type:"string",req:false,desc:"Updated allergen name"},
+      {name:"severity",type:"string",req:false,desc:'"mild", "moderate", or "severe"'}
+    ],response:`{ "success": true, "data": { /* updated allergy */ } }`,errors:[]},
+    {method:"DELETE",path:"/api/patients/allergies/:id",auth:"patient",summary:"Delete an allergy by ID",urlParams:[{name:"id",type:"UUID",desc:"Allergy ID"}],response:`{ "success": true, "data": { "id": "uuid" }, "message": "Allergy deleted successfully." }`,errors:[]},
+    {method:"POST",path:"/api/patients/chronic-conditions",auth:"patient",summary:"Add a new chronic condition",params:[
+      {name:"condition_name",type:"string",req:true,desc:"Name of the condition"},
+      {name:"status",type:"string",req:true,desc:'"active", "managed", or "resolved"'},
+      {name:"diagnosed_date",type:"string",req:false,desc:'e.g. "2023-06-01"'}
+    ],response:`{
+  "success": true,
+  "data": { "condition_name": "Diabetes Type 2", "status": "managed" },
+  "message": "Chronic condition added successfully."
+}`,errors:[]},
+    {method:"GET",path:"/api/patients/chronic-conditions",auth:"patient",summary:"Get chronic conditions (sorted by diagnosed_date desc)",response:`{ "success": true, "data": [ /* condition objects */ ] }`,errors:[]},
+    {method:"PUT",path:"/api/patients/chronic-conditions/:id",auth:"patient",summary:"Update a chronic condition by ID",urlParams:[{name:"id",type:"UUID",desc:"Condition ID"}],params:[
+      {name:"condition_name",type:"string",req:false,desc:"Updated condition name"},
+      {name:"status",type:"string",req:false,desc:'"active", "managed", or "resolved"'},
+      {name:"diagnosed_date",type:"string",req:false,desc:"Updated diagnosis date"}
+    ],response:`{ "success": true, "data": { /* updated condition */ } }`,errors:[]},
+    {method:"DELETE",path:"/api/patients/chronic-conditions/:id",auth:"patient",summary:"Delete a chronic condition",urlParams:[{name:"id",type:"UUID",desc:"Condition ID"}],response:`{ "success": true, "data": { "id": "uuid" }, "message": "Chronic condition deleted successfully." }`,errors:[]},
+    {method:"POST",path:"/api/patients/emergency-info",auth:"patient",summary:"Add a new emergency contact",params:[
+      {name:"contact_name",type:"string",req:true,desc:"Emergency contact's name"},
+      {name:"contact_phone",type:"string",req:true,desc:"Contact phone number"},
+      {name:"contact_email",type:"string",req:true,desc:"Contact email"},
+      {name:"contact_relationship",type:"string",req:false,desc:'e.g. "spouse"'}
+    ],response:`{ "success": true, "data": { "contact_name": "Jane Doe" }, "message": "Emergency info saved successfully." }`,errors:[]},
+    {method:"GET",path:"/api/patients/emergency-info",auth:"patient",summary:"Get emergency contacts (grouped)",response:`{
+  "success": true,
+  "data": {
+    "patientid": "uuid",
+    "emergency_details": [{ "emergency_name": "Jane Doe" }]
+  }
+}`,errors:[]},
+    {method:"PUT",path:"/api/patients/emergency-info/:id",auth:"patient",summary:"Update an emergency contact by ID",urlParams:[{name:"id",type:"UUID",desc:"Emergency contact ID"}],response:`{ "success": true, "data": { /* updated contact */ } }`,errors:[]},
+    {method:"DELETE",path:"/api/patients/emergency-info/:id",auth:"patient",summary:"Delete an emergency contact",urlParams:[{name:"id",type:"UUID",desc:"Emergency contact ID"}],response:`{ "success": true, "message": "Operation successful." }`,errors:[]}
+  ]},
+  {tag:"Doctors",desc:"Doctor profile management and emergency access",endpoints:[
+    {method:"POST",path:"/api/doctors/",auth:"doctor",summary:"Create the authenticated doctor's profile",params:[
+      {name:"full_name",type:"string",req:true,desc:"Doctor's full name"},
+      {name:"license_number",type:"string",req:true,desc:"Medical license number (unique)"},
+      {name:"specialization",type:"string",req:false,desc:"Area of specialization"}
+    ],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid", "full_name": "Dr. Smith",
+    "is_verified": false
+  },
+  "message": "Doctor profile created. Awaiting admin verification."
+}`,errors:[]},
+    {method:"GET",path:"/api/doctors/",auth:"doctor",summary:"Get the authenticated doctor's own profile",response:`{
+  "success": true,
+  "data": {
+    "full_name": "Dr. Smith",
+    "specialization": "Cardiology",
+    "is_verified": true
+  }
+}`,errors:[]},
+    {method:"PUT",path:"/api/doctors/",auth:"doctor",summary:"Update the authenticated doctor's profile",params:[
+      {name:"full_name",type:"string",req:false,desc:"Updated name"},
+      {name:"specialization",type:"string",req:false,desc:"Updated specialization"}
+    ],response:`{ "success": true, "data": { /* updated doctor */ } }`,errors:[]},
+    {method:"GET",path:"/api/doctors/consultations",auth:"verified_doctor",summary:"Get all consultations for the authenticated doctor",response:`{
+  "success": true,
+  "data": [{
+    "patient_name": "John Doe",
+    "status": "in_progress",
+    "health_id": "HLTH-12345"
+  }]
+}`,errors:[]},
+    {method:"GET",path:"/api/doctors/:id",auth:"bearer",summary:"Get a doctor's public profile by doctor profile ID (verified only)",urlParams:[{name:"id",type:"UUID",desc:"Doctor profile ID"}],response:`{
+  "success": true,
+  "data": {
+    "full_name": "Dr. Smith",
+    "specialization": "Cardiology",
+    "is_verified": true
+  }
+}`,errors:[]},
+    {method:"GET",path:"/api/doctors/emergency/:patientId/:clinicId",auth:"verified_doctor",summary:"Fetch full patient data in emergency + notifies emergency contacts via email",urlParams:[
+      {name:"patientId",type:"UUID",desc:"Patient ID"},
+      {name:"clinicId",type:"UUID",desc:"Clinic ID"}
+    ],response:`{
+  "success": true,
+  "data": [{
+    "patient-name": "John Doe",
+    "blood_group": "O+",
+    "allergies": [{ "allergy": "Peanuts", "severity": "severe" }],
+    "active-medications": [{ "medicine-name": "Metformin" }]
+  }]
+}`,errors:[]}
+  ]},
+  {tag:"Consultations",desc:"Start consultations, manage prescriptions",endpoints:[
+    {method:"POST",path:"/api/consultations/",auth:"verified_doctor",summary:"Start a new consultation (doctor must have active access from patient)",params:[
+      {name:"patient_id",type:"UUID",req:true,desc:"Patient ID"}
+    ],response:`{
+  "success": true,
+  "data": {
+    "id": "uuid", "status": "in_progress",
+    "consultation_date": "2026-03-15T10:00:00.000Z"
+  },
+  "message": "Consultation created."
+}`,errors:[{status:"403",code:"FORBIDDEN",when:"No active access permission for patient"}]},
+    {method:"GET",path:"/api/consultations/:consultationId",auth:"verified_doctor",summary:"Get a specific consultation by ID",urlParams:[{name:"consultationId",type:"UUID",desc:"Consultation ID"}],response:`{ "success": true, "data": { /* consultation object */ } }`,errors:[]},
+    {method:"PUT",path:"/api/consultations/:consultationId/status",auth:"verified_doctor",summary:"Update a consultation's status",urlParams:[{name:"consultationId",type:"UUID",desc:"Consultation ID"}],params:[
+      {name:"status",type:"string",req:true,desc:'"in_progress" or "completed"'}
+    ],response:`{
+  "success": true,
+  "data": { "status": "completed", "updated_at": "..." },
+  "message": "Operation successful."
+}`,errors:[]},
+    {method:"POST",path:"/api/consultations/:consultationId/prescription",auth:"verified_doctor",summary:"Create or replace a prescription for a consultation",urlParams:[{name:"consultationId",type:"UUID",desc:"Consultation ID"}],params:[
+      {name:"items",type:"array",req:true,desc:"Array of {drug_name, dosage, frequency, duration_days}"}
+    ],response:`{
+  "success": true,
+  "data": { "prescription_id": "uuid", "items_count": 3 },
+  "message": "Prescription saved successfully"
+}`,errors:[{status:"400",code:"BAD_REQUEST",when:"Consultation is already completed"}]},
+    {method:"GET",path:"/api/consultations/:consultationId/prescription",auth:"verified_doctor",summary:"Get the prescription for a consultation",urlParams:[{name:"consultationId",type:"UUID",desc:"Consultation ID"}],response:`{
+  "success": true,
+  "data": {
+    "prescription_id": "uuid",
+    "items": [{ "drug_name": "Metformin", "dosage": "500mg" }]
+  }
+}`,errors:[]}
+  ]},
+  {tag:"Medications",desc:"Active medications for patients",endpoints:[
+    {method:"GET",path:"/api/medications/:userId",auth:"public",summary:"Get active medications for a user by user ID",urlParams:[{name:"userId",type:"UUID",desc:"User ID"}],response:`{
+  "success": true,
+  "data": [{
+    "name": "Metformin", "dosage": "500mg",
+    "prescibed_for": "Diabetes"
+  }],
+  "message": "Medications fetched successfully"
+}`,errors:[]},
+    {method:"POST",path:"/api/medications/",auth:"doctor",summary:"Add a new active medication for a patient",params:[
+      {name:"user_id",type:"UUID",req:true,desc:"Patient's user ID"},
+      {name:"name",type:"string",req:true,desc:"Medication name"},
+      {name:"dosage",type:"string",req:true,desc:'e.g. "500mg"'},
+      {name:"prescibed_for",type:"string",req:true,desc:"Condition"},
+      {name:"prescibed_at",type:"string",req:true,desc:"Prescription date (ISO)"}
+    ],response:`{ "success": true, "data": { /* medication object */ }, "message": "Created." }`,errors:[]},
+    {method:"PUT",path:"/api/medications/:id",auth:"doctor",summary:"Update an active medication",urlParams:[{name:"id",type:"UUID",desc:"Medication ID"}],response:`{ "success": true, "data": { /* updated medication */ } }`,errors:[]},
+    {method:"DELETE",path:"/api/medications/:id",auth:"doctor",summary:"Delete an active medication",urlParams:[{name:"id",type:"UUID",desc:"Medication ID"}],response:`{
+  "success": true,
+  "data": { "id": "uuid", "name": "Metformin" },
+  "message": "Medication deleted successfully"
+}`,errors:[]}
+  ]},
+  {tag:"Clinics",desc:"Clinic management for verified doctors",endpoints:[
+    {method:"POST",path:"/api/clinics/",auth:"verified_doctor",summary:"Add a new clinic for the authenticated doctor",params:[
+      {name:"clinicName",type:"string",req:true,desc:"Clinic name"},
+      {name:"address",type:"string",req:true,desc:"Clinic address"},
+      {name:"email",type:"string",req:true,desc:"Clinic email"},
+      {name:"phone",type:"string",req:true,desc:"Clinic phone"},
+      {name:"logoURL",type:"string",req:false,desc:"Logo URL"}
+    ],response:`{
+  "success": true,
+  "data": { "clinic_name": "Heart Care Center", "address": "123 Main St" },
+  "message": "Clinic added successfully."
+}`,errors:[]},
+    {method:"GET",path:"/api/clinics/",auth:"verified_doctor",summary:"Get all clinics for the authenticated doctor",response:`{ "success": true, "data": [ /* clinic objects */ ] }`,errors:[]},
+    {method:"GET",path:"/api/clinics/:id",auth:"verified_doctor",summary:"Get a single clinic by ID",urlParams:[{name:"id",type:"UUID",desc:"Clinic ID"}],response:`{ "success": true, "data": { /* clinic object */ } }`,errors:[]},
+    {method:"PUT",path:"/api/clinics/:id",auth:"verified_doctor",summary:"Update a clinic by ID",urlParams:[{name:"id",type:"UUID",desc:"Clinic ID"}],response:`{ "success": true, "data": { /* updated clinic */ } }`,errors:[]},
+    {method:"DELETE",path:"/api/clinics/:id",auth:"verified_doctor",summary:"Delete a clinic by ID",urlParams:[{name:"id",type:"UUID",desc:"Clinic ID"}],response:`{ "success": true, "message": "Operation successful." }`,errors:[]}
+  ]},
+  {tag:"Admin & OCR",desc:"Admin verification, OCR scanning",endpoints:[
+    {method:"PUT",path:"/api/admin/doctors/:id/verify",auth:"admin",summary:"Verify a doctor's profile, enabling consultation creation",urlParams:[{name:"id",type:"UUID",desc:"Doctor profile ID"}],response:`{
+  "success": true,
+  "data": { "id": "uuid", "is_verified": true },
+  "message": "Operation successful."
+}`,errors:[]},
+    {method:"POST",path:"/api/ocr/scan",auth:"public",summary:"Upload a prescription image/PDF for OCR. multipart/form-data. Max 10MB.",params:[
+      {name:"file",type:"File",req:true,desc:"JPEG/PNG/PDF, max 10MB"},
+      {name:"consultation_id",type:"string",req:false,desc:"Link to consultation"},
+      {name:"patient_id",type:"string",req:false,desc:"Link to patient"},
+      {name:"doctor_id",type:"string",req:false,desc:"Link to doctor"}
+    ],response:`{
+  "success": true,
+  "data": { "prescription_id": "uuid", "drugs_count": 3 },
+  "message": "Prescription saved successfully"
+}`,errors:[{status:"503",code:"OCR_NOT_READY",when:"OCR service still initializing"},{status:"500",code:"OCR_PROCESSING_ERROR",when:"OCR scan failed"}]},
+    {method:"GET",path:"/api/ocr/health",auth:"public",summary:"Check OCR service health and readiness",response:`{
+  "success": true,
+  "data": { "status": "healthy", "ready": true, "pendingRequests": 0 },
+  "message": "OCR service is healthy"
+}`,errors:[]},
+    {method:"GET",path:"/health",auth:"public",summary:"Root-level health check (mounted at /, not /api)",response:`{ "success": true, "data": { "ok": true }, "message": "Operation successful." }`,errors:[]}
+  ]}
+];
+
+const authLabels = {
+  "public":"🔓 Public","bearer":"🔐 Auth","patient":"🔐 Patient","doctor":"🔐 Doctor",
+  "verified_doctor":"🔐 Verified Doctor","admin":"🔐 Admin"
+};
+
+let activeFilter = 'all';
+let openSections = {};
+let openEndpoints = {};
+let showTry = {};
+
+function methodClass(m){return 'm-'+m.toLowerCase()}
+
+function renderAuth(a){
+  const map = {
+    "public":{bg:"#EAF3DE",c:"#3B6D11",t:"Public"},
+    "bearer":{bg:"#E6F1FB",c:"#185FA5",t:"Auth"},
+    "patient":{bg:"#FAEEDA",c:"#854F0B",t:"Patient"},
+    "doctor":{bg:"#FAEEDA",c:"#854F0B",t:"Doctor"},
+    "verified_doctor":{bg:"#FAEEDA",c:"#854F0B",t:"Verified Doctor"},
+    "admin":{bg:"#FCEBEB",c:"#A32D2D",t:"Admin"}
+  };
+  const s=map[a]||map.public;
+  return `<span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${s.bg};color:${s.c};font-family:var(--font-sans)">${s.t}</span>`;
+}
+
+function renderParams(params,label){
+  if(!params||!params.length)return '';
+  return `<div class="detail-section">
+    <div class="detail-label">${label}</div>
+    <table class="param-table">
+      <tr><th>Name</th><th>Type</th><th>Req</th><th>Description</th></tr>
+      ${params.map(p=>`<tr>
+        <td><code>${p.name}</code></td>
+        <td class="type-text">${p.type}</td>
+        <td>${p.req===true?'<span class="req-pill">req</span>':p.req===false?'<span class="opt-pill">opt</span>':''}</td>
+        <td style="color:var(--color-text-secondary)">${p.desc||''}</td>
+      </tr>`).join('')}
+    </table>
+  </div>`;
+}
+
+function renderErrors(errors){
+  if(!errors||!errors.length)return '';
+  return `<div class="detail-section">
+    <div class="detail-label">Possible Errors</div>
+    <table class="err-table">
+      ${errors.map(e=>`<tr>
+        <td style="min-width:36px"><span style="font-size:11px;padding:2px 6px;border-radius:3px;background:#FAEEDA;color:#854F0B;font-family:var(--font-sans)">${e.status}</span></td>
+        <td><code style="font-size:11px">${e.code}</code></td>
+        <td style="color:var(--color-text-secondary);font-size:12px;font-family:var(--font-sans)">${e.when}</td>
+      </tr>`).join('')}
+    </table>
+  </div>`;
+}
+
+function buildTryPanel(ep,key){
+  const allParams = [...(ep.urlParams||[]),(ep.params||[]).map(p=>({...p,inBody:true}))].flat();
+  const fields = [
+    ...(ep.auth!=='public'?[{name:'Authorization',placeholder:'Bearer eyJhbGci...',body:false,header:true}]:[]),
+    ...(ep.urlParams||[]).map(p=>({name:p.name,placeholder:p.type,body:false})),
+    ...(ep.params||[]).map(p=>({name:p.name,placeholder:p.desc||p.type,body:true}))
+  ];
+  return `<div class="try-panel" id="try-${key}">
+    <div class="try-panel-header">Try it — requests go to your local server at http://localhost:3000</div>
+    <div class="try-panel-body">
+      ${fields.map(f=>`<div class="try-field">
+        <label>${f.name}${f.header?' (header)':f.body?' (body)':' (path)'}</label>
+        <input type="text" placeholder="${f.placeholder}" id="f-${key}-${f.name.replace(/[^a-z0-9]/gi,'_')}">
+      </div>`).join('')}
+      <button class="exec-btn" onclick="execRequest('${key}')">Execute</button>
+      <div id="resp-${key}"></div>
+    </div>
+  </div>`;
+}
+
+async function execRequest(key){
+  const parts = key.split('::');
+  const ti = parseInt(parts[0]), ei = parseInt(parts[1]);
+  const ep = API[ti].endpoints[ei];
+  
+  let url = 'http://localhost:3000' + ep.path;
+  const headers = {'Content-Type':'application/json'};
+  const bodyObj = {};
+  
+  const authEl = document.getElementById(`f-${key}-Authorization`);
+  if(authEl&&authEl.value) headers['Authorization'] = authEl.value;
+  
+  (ep.urlParams||[]).forEach(p=>{
+    const el = document.getElementById(`f-${key}-${p.name}`);
+    if(el&&el.value) url = url.replace(':'+p.name, el.value);
+  });
+  
+  (ep.params||[]).forEach(p=>{
+    const el = document.getElementById(`f-${key}-${p.name}`);
+    if(el&&el.value) bodyObj[p.name] = el.value;
+  });
+  
+  const respEl = document.getElementById(`resp-${key}`);
+  respEl.innerHTML = '<div style="padding:8px;font-size:12px;color:var(--color-text-secondary);font-family:var(--font-sans)">Sending request...</div>';
+  
+  try {
+    const opts = {method:ep.method, headers};
+    if(['POST','PUT','PATCH'].includes(ep.method)&&Object.keys(bodyObj).length>0){
+      opts.body = JSON.stringify(bodyObj);
+    }
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(()=>null);
+    const cls = res.ok?'resp-200':res.status>=500?'resp-5xx':'resp-4xx';
+    respEl.innerHTML = `<div class="response-box">
+      <div class="resp-header ${cls}">${res.status} ${res.statusText}</div>
+      <div class="resp-body">${data?JSON.stringify(data,null,2):'(empty response)'}</div>
+    </div>`;
+  } catch(e) {
+    respEl.innerHTML = `<div class="response-box">
+      <div class="resp-header resp-5xx">Network Error</div>
+      <div class="resp-body">${e.message}\n\nRequest: ${ep.method} ${url}\n\nCheck that:\n1) Backend is running at http://localhost:3000\n2) CORS is enabled on backend\n3) URL/path and required auth token are valid</div>
+    </div>`;
+  }
+}
+
+function toggleSection(ti){
+  openSections[ti] = !openSections[ti];
+  render();
+}
+
+function toggleEndpoint(key){
+  openEndpoints[key] = !openEndpoints[key];
+  render();
+}
+
+function toggleTry(key,e){
+  e.stopPropagation();
+  showTry[key] = !showTry[key];
+  render();
+}
+
+let filterMethod = 'all';
+let searchText = '';
+
+function setFilter(m, btn){
+  filterMethod = m;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+
+function filterEndpoints(){
+  searchText = document.getElementById('searchInput').value.toLowerCase();
+  render();
+}
+
+function render(){
+  const container = document.getElementById('apiDocs');
+  let html = '';
+  
+  API.forEach((section,ti)=>{
+    const visibleEps = section.endpoints.filter(ep=>{
+      if(filterMethod!=='all'&&ep.method!==filterMethod) return false;
+      if(searchText&&!ep.path.toLowerCase().includes(searchText)&&!ep.summary.toLowerCase().includes(searchText)) return false;
+      return true;
+    });
+    if(!visibleEps.length) return;
+    
+    const isOpen = openSections[ti];
+    html += `<div class="tag-section">
+      <div class="tag-header" onclick="toggleSection(${ti})">
+        <span class="tag-name">${section.tag}</span>
+        <span class="tag-count">${visibleEps.length} endpoint${visibleEps.length!==1?'s':''}</span>
+        <span class="tag-arrow${isOpen?' open':''}">&#9658;</span>
+      </div>`;
+    
+    if(isOpen){
+      html += `<div class="endpoint-list">`;
+      visibleEps.forEach(ep=>{
+        const origIdx = section.endpoints.indexOf(ep);
+        const key = `${ti}::${origIdx}`;
+        const isEpOpen = openEndpoints[key];
+        html += `<div class="endpoint-row">
+          <div class="endpoint-header" onclick="toggleEndpoint('${key}')">
+            <span class="method ${methodClass(ep.method)}">${ep.method}</span>
+            <span class="ep-path">${ep.path}</span>
+            ${renderAuth(ep.auth)}
+            <span class="ep-desc" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ep.summary}</span>
+          </div>`;
+        
+        if(isEpOpen){
+          html += `<div class="endpoint-detail">
+            <div style="font-size:13px;color:var(--color-text-secondary);font-family:var(--font-sans);margin-bottom:14px">${ep.summary}</div>
+            ${renderParams(ep.urlParams,'Path Parameters')}
+            ${renderParams(ep.params, ep.method==='GET'?'Query Parameters':'Request Body')}
+            <div class="detail-section">
+              <div class="detail-label">Response 200</div>
+              <div class="code-block">${ep.response}</div>
+            </div>
+            ${renderErrors(ep.errors)}
+            <button class="try-btn" onclick="toggleTry('${key}',event)">${showTry[key]?'Hide':'Try it out'}</button>
+            ${showTry[key]?buildTryPanel(ep,key):''}
+          </div>`;
+        }
+        html += `</div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+  });
+  
+  container.innerHTML = html;
+}
+
+render();
+</script>
